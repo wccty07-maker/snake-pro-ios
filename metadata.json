@@ -1,0 +1,6 @@
+{
+  "name": "Snake Pro",
+  "description": "Snake Pro - Modern arcade snake adventure featuring challenging level stages, endless mode, responsive swipe controls, and customizable skins!",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Represents a player high score entry in the Snake Pro leaderboard per game mode",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique identifier of the player"
+        },
+        "username": {
+          "type": "string",
+          "description": "The nickname/display name of the player",
+          "maxLength": 30
+        },
+        "score": {
+          "type": "integer",
+          "description": "The highest score achieved by the player in this mode"
+        },
+        "mode": {
+          "type": "string",
+          "description": "Game mode: Classic, Missions, or Time",
+          "enum": ["Classic", "Missions", "Time"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the score entry was first created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the score entry was last updated"
+        }
+      },
+      "required": ["username", "score", "mode"]
+    }
+  },
+  "firestore": {
+    "/leaderboard/{entryId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Leaderboard collection partitioned by mode (Classic, Missions, Time)"
+    }
+  }
+}

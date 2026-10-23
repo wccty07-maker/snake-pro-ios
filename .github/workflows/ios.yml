@@ -1,0 +1,302 @@
+name: iOS Build & TestFlight Release Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build Signed IPA and Upload to TestFlight
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Node Dependencies
+        run: |
+          npm install --legacy-peer-deps
+          # Vite / Tailwind v4 / LightningCSS / Oxide / Rolldown require macOS arm64 native binaries on GitHub Actions macos-14 runner
+          OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
+          LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
+          ROLLDOWN_VER=$(node -p "require('./node_modules/rolldown/package.json').version" 2>/dev/null || echo "1.2.9")
+          npm install @tailwindcss/oxide-darwin-arm64@$OXIDE_VER lightningcss-darwin-arm64@$LIGHTNING_VER @rolldown/binding-darwin-arm64@$ROLLDOWN_VER @esbuild/darwin-arm64 @resvg/resvg-js-darwin-arm64 --no-save
+
+          # Ensure native oxide binary is copied to all @tailwindcss/oxide directories
+          find node_modules -type d -name "oxide" | while read -r dir; do
+            if [ -f "node_modules/@tailwindcss/oxide-darwin-arm64/tailwindcss-oxide.darwin-arm64.node" ]; then
+              cp -f "node_modules/@tailwindcss/oxide-darwin-arm64/tailwindcss-oxide.darwin-arm64.node" "$dir/" 2>/dev/null || true
+            fi
+          done
+
+          # Ensure native lightningcss binary is placed in all lightningcss directories so both require pathways work
+          find node_modules -type d -name "lightningcss" | while read -r dir; do
+            if [ -f "node_modules/lightningcss-darwin-arm64/lightningcss.darwin-arm64.node" ]; then
+              cp -f "node_modules/lightningcss-darwin-arm64/lightningcss.darwin-arm64.node" "$dir/" 2>/dev/null || true
+            fi
+          done
+
+          # Bypass Capacitor CLI App ID validation for numeric segments (e.g. elemall.snakegame.1)
+          node scripts/patch-capacitor.js || true
+
+      - name: Build Web Application
+        run: |
+          npx vite build
+
+      - name: Prepare & Sync iOS Native Project
+        run: |
+          echo "=== Verifying and Preparing iOS Project ==="
+          
+          # Ensure root capacitor config exists
+          if [ ! -f "capacitor.config.json" ]; then
+            cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "elemall.snakegame.1",
+            "appName": "Snake Pro",
+            "webDir": "dist",
+            "server": {
+              "androidScheme": "https",
+              "iosScheme": "capacitor"
+            },
+            "ios": {
+              "contentInset": "automatic",
+              "preferredContentMode": "mobile"
+            }
+          }
+          EOF
+          fi
+
+          # If the Xcode project does not exist in the repository clone, generate it via Capacitor
+          if [ ! -d "ios/App/App.xcodeproj" ]; then
+            echo "ios/App/App.xcodeproj not found. Initializing iOS platform via Capacitor..."
+            rm -rf ios
+            npx cap add ios
+          fi
+
+          # Sync web dist assets and native plugins
+          npx cap sync ios
+
+          # Copy web dist assets directly into native iOS public folder
+          mkdir -p ios/App/App/public
+          rm -rf ios/App/App/public/*
+          cp -r dist/* ios/App/App/public/
+          echo "Web assets successfully synchronized into iOS bundle."
+
+          # Verify project directory structure
+          echo "=== Verified iOS Directory Contents ==="
+          ls -la ios/App/
+          find ios/App -maxdepth 2 -name "*.xcodeproj" -o -name "*.xcworkspace"
+
+      - name: Set up Ruby & Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: false
+
+      - name: Install Fastlane
+        run: |
+          gem install fastlane --no-document
+
+      - name: Select Xcode 16 / 15
+        run: |
+          if [ -d "/Applications/Xcode_16.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.0.app
+          elif [ -d "/Applications/Xcode_15.4.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_15.4.app
+          fi
+          xcodebuild -version
+
+      - name: Resolve Swift Package Dependencies
+        run: |
+          cd ios/App
+          if [ -d "App.xcodeproj" ]; then
+            xcodebuild -resolvePackageDependencies -project App.xcodeproj || true
+          fi
+
+      - name: Generate Fastfile
+        run: |
+          mkdir -p ios/App/fastlane
+          cat << 'EOF' > ios/App/fastlane/Fastfile
+          default_platform(:ios)
+
+          platform :ios do
+            desc "Build Signed IPA and Upload to App Store Connect / TestFlight"
+            lane :release do
+              # 1. Configure App Store Connect API Key
+              api_key = app_store_connect_api_key(
+                key_id: ENV["APP_STORE_KEY_ID"],
+                issuer_id: ENV["APP_STORE_ISSUER_ID"],
+                key_content: ENV["APP_STORE_PRIVATE_KEY"],
+                is_key_content_base64: false,
+                in_house: false
+              )
+
+              # 2. Create isolated temporary keychain on CI runner
+              keychain_name = "ci_fastlane_keychain"
+              keychain_pwd  = "runner_temporary_password_123"
+
+              delete_keychain(name: keychain_name) rescue nil
+
+              create_keychain(
+                name: keychain_name,
+                password: keychain_pwd,
+                default_keychain: true,
+                unlock: true,
+                timeout: 3600,
+                lock_when_sleeps: false
+              )
+
+              # Resolve absolute path to the created keychain file
+              keychain_path = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+              keychain_path = File.expand_path("~/Library/Keychains/#{keychain_name}") unless File.exist?(keychain_path)
+
+              # Pre-install Apple WWDR intermediate certs into the dedicated keychain
+              sh("curl -fSL --retry 3 https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o /tmp/AppleWWDRCAG3.cer && security import /tmp/AppleWWDRCAG3.cer -k '#{keychain_path}' -T /usr/bin/codesign -T /usr/bin/security") rescue nil
+              sh("curl -fSL --retry 3 https://www.apple.com/certificateauthority/AppleWWDRCAG6.cer -o /tmp/AppleWWDRCAG6.cer && security import /tmp/AppleWWDRCAG6.cer -k '#{keychain_path}' -T /usr/bin/codesign -T /usr/bin/security") rescue nil
+
+              require "base64"
+
+              # 3. Retrieve or import Apple Distribution Certificate
+              if ENV["BUILD_CERTIFICATE_BASE64"] && !ENV["BUILD_CERTIFICATE_BASE64"].strip.empty?
+                UI.message("Found BUILD_CERTIFICATE_BASE64 secret! Importing existing Distribution Certificate...")
+                p12_path = "/tmp/distribution.p12"
+                File.binwrite(p12_path, Base64.decode64(ENV["BUILD_CERTIFICATE_BASE64"].strip))
+                import_certificate(
+                  certificate_path: p12_path,
+                  certificate_password: ENV["P12_PASSWORD"] || "",
+                  keychain_path: keychain_path,
+                  keychain_password: keychain_pwd
+                )
+              else
+                UI.message("Retrieving or generating certificate via App Store Connect API...")
+                get_certificates(
+                  api_key: api_key,
+                  keychain_path: keychain_path,
+                  keychain_password: keychain_pwd
+                )
+              end
+
+              # Grant codesign permission to private key without interactive prompt
+              sh("security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k #{keychain_pwd} \"#{keychain_path}\"") rescue nil
+
+              # 4. Retrieve or create Provisioning Profile
+              get_provisioning_profile(
+                api_key: api_key,
+                app_identifier: "elemall.snakegame.1"
+              )
+
+              team_id = ENV["APPLE_TEAM_ID"] || lane_context[SharedValues::SIGH_TEAM_ID]
+              profile_name = lane_context[SharedValues::SIGH_NAME] || "elemall.snakegame.1 AppStore"
+              UI.message("Apple Developer Team ID: #{team_id}")
+              UI.message("Using provisioning profile: #{profile_name}")
+
+              # 5. Patch project.pbxproj to ensure manual signing & development team match
+              pbxproj_path = "App.xcodeproj/project.pbxproj"
+              if File.exist?(pbxproj_path)
+                content = File.read(pbxproj_path)
+                if team_id && !team_id.empty?
+                  if content.include?("DEVELOPMENT_TEAM")
+                    content.gsub!(/DEVELOPMENT_TEAM\s*=\s*[^;]*;/, "DEVELOPMENT_TEAM = #{team_id};")
+                  else
+                    content.gsub!(/(PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;)/, "\\1\n\t\t\t\tDEVELOPMENT_TEAM = #{team_id};")
+                  end
+                end
+                if content.include?("CODE_SIGN_STYLE")
+                  content.gsub!(/CODE_SIGN_STYLE\s*=\s*[^;]*;/, "CODE_SIGN_STYLE = Manual;")
+                else
+                  content.gsub!(/(PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;)/, "\\1\n\t\t\t\tCODE_SIGN_STYLE = Manual;")
+                end
+                File.write(pbxproj_path, content)
+              end
+
+              # 6. Detect workspace or project dynamically
+              workspace_file = Dir["*.xcworkspace"].reject { |w| w.include?("project.xcworkspace") }.first
+              project_file   = Dir["*.xcodeproj"].first || "App.xcodeproj"
+
+              build_opts = {
+                scheme: "App",
+                clean: true,
+                export_method: "app-store",
+                export_options: {
+                  method: "app-store",
+                  signingStyle: "manual",
+                  teamID: team_id,
+                  provisioningProfiles: {
+                    "elemall.snakegame.1" => profile_name
+                  }
+                },
+                xcargs: "DEVELOPMENT_TEAM=#{team_id} CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=\"Apple Distribution\" PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\" OTHER_CODE_SIGN_FLAGS=\"--keychain #{keychain_path}\"",
+                output_directory: "../../build",
+                output_name: "SnakePro.ipa"
+              }
+
+              if workspace_file && File.exist?(workspace_file)
+                UI.message("Building with workspace: #{workspace_file}")
+                build_opts[:workspace] = workspace_file
+              else
+                UI.message("Building with project: #{project_file}")
+                build_opts[:project] = project_file
+              end
+
+              build_app(build_opts)
+
+              # 7. Upload directly to TestFlight
+              upload_to_testflight(
+                api_key: api_key,
+                ipa: "../../build/SnakePro.ipa",
+                skip_waiting_for_build_processing: true
+              )
+            end
+          end
+          EOF
+
+      - name: Run Fastlane Release (Codesign, Build & Upload)
+        env:
+          CI: "true"
+          FASTLANE_DONT_ASK: "1"
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
+          APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+          APP_STORE_PRIVATE_KEY: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          cd ios/App
+          fastlane release
+
+      - name: Backup Generated Certificates & Profiles
+        if: always()
+        run: |
+          mkdir -p build/signing_backup
+          cp ios/App/*.p12 build/signing_backup/ 2>/dev/null || true
+          cp ios/App/*.cer build/signing_backup/ 2>/dev/null || true
+          cp ios/App/*.mobileprovision build/signing_backup/ 2>/dev/null || true
+
+      - name: Upload Signing Credentials Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Apple-Signing-Credentials-Backup
+          path: build/signing_backup
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload IPA Artifact to GitHub
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SnakePro-Signed-IPA
+          path: build/SnakePro.ipa
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,383 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Space & Nebula Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1736" />
+      <stop offset="50%" stop-color="#04272c" />
+      <stop offset="100%" stop-color="#03121d" />
+    </linearGradient>
+
+    <!-- Glass App Icon Border -->
+    <linearGradient id="iconBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8" />
+      <stop offset="35%" stop-color="#34d399" stop-opacity="0.5" />
+      <stop offset="70%" stop-color="#818cf8" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.7" />
+    </linearGradient>
+
+    <!-- Glass Specular Highlight -->
+    <linearGradient id="specularGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35" />
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Radial Nebula Glow Behind Mascot -->
+    <radialGradient id="nebulaGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.45" />
+      <stop offset="50%" stop-color="#06b6d4" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Snake Skin 3D Gradients -->
+    <radialGradient id="headGrad" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#6ee7b7" />
+      <stop offset="30%" stop-color="#34d399" />
+      <stop offset="75%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </radialGradient>
+
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ee7b7" />
+      <stop offset="40%" stop-color="#10b981" />
+      <stop offset="85%" stop-color="#047857" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+
+    <linearGradient id="bellyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#d1fae5" />
+      <stop offset="100%" stop-color="#a7f3d0" />
+    </linearGradient>
+
+    <!-- Monster Dragon Horns -->
+    <linearGradient id="hornGrad" x1="0%" y1="100%" x2="60%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#fef9c3" />
+    </linearGradient>
+
+    <!-- Golden Crown -->
+    <linearGradient id="crownGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+
+    <!-- Candied Apple Gradient -->
+    <radialGradient id="appleGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#fda4af" />
+      <stop offset="30%" stop-color="#fb7185" />
+      <stop offset="70%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#9f1239" />
+    </radialGradient>
+
+    <!-- Big Anime Eye Gradients -->
+    <radialGradient id="eyeIrisGrad" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#67e8f9" />
+      <stop offset="40%" stop-color="#0891b2" />
+      <stop offset="80%" stop-color="#0e7490" />
+      <stop offset="100%" stop-color="#155e75" />
+    </radialGradient>
+
+    <!-- Drop Shadows and Glow Filters -->
+    <filter id="iconSoftGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="mascotShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#021f1d" flood-opacity="0.8" />
+    </filter>
+
+    <filter id="appleGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#f43f5e" flood-opacity="0.5" />
+    </filter>
+
+    <filter id="starGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- ==================== 1. Squircle App Icon Base ==================== -->
+  <rect width="512" height="512" rx="118" fill="url(#bgGrad)" />
+
+  <!-- Inner Ambient Nebula Glow -->
+  <circle cx="256" cy="270" r="210" fill="url(#nebulaGlow)" />
+
+  <!-- Subtle Cyber Tech Background Dots & Lines -->
+  <g opacity="0.12" stroke="#38bdf8" stroke-width="1.5">
+    <circle cx="256" cy="256" r="190" fill="none" stroke-dasharray="6 10" />
+    <circle cx="256" cy="256" r="130" fill="none" stroke-dasharray="4 8" />
+    <line x1="70" y1="256" x2="442" y2="256" stroke-dasharray="8 8" />
+    <line x1="256" y1="70" x2="256" y2="442" stroke-dasharray="8 8" />
+  </g>
+
+  <!-- Floating Magic Sparkles in Background -->
+  <g filter="url(#starGlow)">
+    <!-- Cyan star top left -->
+    <path d="M 100 130 Q 100 145 85 145 Q 100 145 100 160 Q 100 145 115 145 Q 100 145 100 130 Z" fill="#67e8f9" opacity="0.8" />
+    <!-- Yellow star top right -->
+    <path d="M 410 110 Q 410 128 392 128 Q 410 128 410 146 Q 410 128 428 128 Q 410 128 410 110 Z" fill="#fde047" opacity="0.9" />
+    <!-- Pink star bottom left -->
+    <path d="M 85 365 Q 85 378 72 378 Q 85 378 85 391 Q 85 378 98 378 Q 85 378 85 365 Z" fill="#f472b6" opacity="0.75" />
+    <!-- Small star right center -->
+    <circle cx="435" cy="265" r="4.5" fill="#fef08a" opacity="0.8" />
+    <circle cx="95" cy="245" r="3.5" fill="#a7f3d0" opacity="0.7" />
+  </g>
+
+  <!-- ==================== 2. Mascot: Cute Coiled Monster Snake ==================== -->
+  <g filter="url(#mascotShadow)">
+
+    <!-- Snug Coiled Body behind head & wrapping around front -->
+    <path
+      d="M 175 355 C 130 380 95 425 155 450 C 235 475 330 460 385 415 C 430 375 425 325 375 305 C 335 290 295 325 305 355 C 315 385 285 410 230 405 C 185 400 180 370 175 355 Z"
+      fill="url(#bodyGrad)"
+      stroke="#022c22"
+      stroke-width="5"
+      stroke-linejoin="round"
+    />
+
+    <!-- Tail Cute Monster Fin / Bulb -->
+    <path
+      d="M 400 330 C 445 320 465 295 455 270 C 440 255 415 275 410 305 Z"
+      fill="#34d399"
+      stroke="#022c22"
+      stroke-width="4"
+    />
+    <circle cx="440" cy="285" r="9" fill="#fde047" stroke="#022c22" stroke-width="2.5" />
+    <circle cx="443" cy="283" r="3" fill="#ffffff" />
+
+    <!-- Cute Monster Tail Spots -->
+    <ellipse cx="330" cy="435" rx="14" ry="8" fill="#c084fc" opacity="0.4" transform="rotate(-15 330 435)" />
+    <ellipse cx="255" cy="442" rx="12" ry="7" fill="#c084fc" opacity="0.4" transform="rotate(5 255 442)" />
+    <ellipse cx="180" cy="425" rx="11" ry="6" fill="#c084fc" opacity="0.4" transform="rotate(25 180 425)" />
+
+    <!-- Underbelly Cream Ribs on tail coil -->
+    <path
+      d="M 210 425 C 235 445 280 445 315 428 C 285 438 240 438 210 425 Z"
+      fill="url(#bellyGrad)"
+      opacity="0.85"
+    />
+
+    <!-- Left Monster Dragon Horn -->
+    <path
+      d="M 160 145 C 130 95 135 60 120 42 C 140 68 175 95 195 125 Z"
+      fill="url(#hornGrad)"
+      stroke="#022c22"
+      stroke-width="4.5"
+      stroke-linejoin="round"
+    />
+    <!-- Left Horn Glow Rings -->
+    <path d="M 136 78 Q 148 83 158 80" stroke="#ca8a04" stroke-width="2.5" fill="none" />
+    <path d="M 148 102 Q 165 108 177 103" stroke="#ca8a04" stroke-width="2.5" fill="none" />
+
+    <!-- Right Monster Dragon Horn -->
+    <path
+      d="M 335 145 C 365 95 360 60 375 42 C 355 68 320 95 300 125 Z"
+      fill="url(#hornGrad)"
+      stroke="#022c22"
+      stroke-width="4.5"
+      stroke-linejoin="round"
+    />
+    <!-- Right Horn Glow Rings -->
+    <path d="M 360 78 Q 348 83 338 80" stroke="#ca8a04" stroke-width="2.5" fill="none" />
+    <path d="M 348 102 Q 332 108 318 103" stroke="#ca8a04" stroke-width="2.5" fill="none" />
+
+    <!-- Tilted King's Sparkling Crown (Snake King) -->
+    <g transform="translate(265, 52) rotate(14)">
+      <!-- Crown Base Glow -->
+      <polygon
+        points="0,48 5,14 26,30 48,6 70,30 91,14 96,48"
+        fill="url(#crownGrad)"
+        stroke="#78350f"
+        stroke-width="4"
+        stroke-linejoin="round"
+      />
+      <!-- Crown Jewels -->
+      <circle cx="48" cy="18" r="5" fill="#f43f5e" stroke="#881337" stroke-width="1.5" />
+      <circle cx="16" cy="30" r="3.5" fill="#38bdf8" stroke="#0369a1" stroke-width="1.2" />
+      <circle cx="80" cy="30" r="3.5" fill="#38bdf8" stroke="#0369a1" stroke-width="1.2" />
+      <!-- Crown Rim -->
+      <rect x="0" y="44" width="96" height="8" rx="3" fill="#eab308" stroke="#78350f" stroke-width="2" />
+      <!-- Star on center peak -->
+      <polygon points="48,2 50,5 53,5 51,7 52,10 48,8 44,10 45,7 43,5 46,5" fill="#ffffff" />
+    </g>
+
+    <!-- Chubby Monster Head (Soft Rounded Silhouette) -->
+    <ellipse
+      cx="248"
+      cy="236"
+      rx="125"
+      ry="115"
+      fill="url(#headGrad)"
+      stroke="#022c22"
+      stroke-width="6"
+    />
+
+    <!-- Head 3D Specular Highlight Bulb -->
+    <ellipse cx="225" cy="165" rx="55" ry="25" fill="#ffffff" opacity="0.32" transform="rotate(-12 225 165)" />
+
+    <!-- Cute Pastel Belly Patch at Bottom of Chin -->
+    <path
+      d="M 195 285 C 205 330 285 330 298 285 C 285 315 212 315 195 285 Z"
+      fill="url(#bellyGrad)"
+      stroke="#059669"
+      stroke-width="2.5"
+    />
+
+    <!-- Monster Freckle Spots on Head -->
+    <circle cx="158" cy="185" r="9" fill="#c084fc" opacity="0.45" />
+    <circle cx="145" cy="210" r="6.5" fill="#c084fc" opacity="0.4" />
+    <circle cx="340" cy="190" r="8.5" fill="#c084fc" opacity="0.45" />
+
+    <!-- ==================== Adorable Blushing Cheeks ==================== -->
+    <ellipse cx="160" cy="275" rx="22" ry="13" fill="#fb7185" opacity="0.75" />
+    <ellipse cx="334" cy="275" rx="22" ry="13" fill="#fb7185" opacity="0.75" />
+    <!-- Cheerful Cheek Highlight Lines -->
+    <path d="M 152 272 Q 162 268 168 273" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.8" />
+    <path d="M 326 272 Q 336 268 342 273" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.8" />
+
+    <!-- ==================== Giant Sparkling Anime Eyes ==================== -->
+    <!-- Left Eye Outer White Sclera -->
+    <ellipse
+      cx="195"
+      cy="222"
+      rx="38"
+      ry="44"
+      fill="#ffffff"
+      stroke="#022c22"
+      stroke-width="5"
+    />
+    <!-- Left Eye Iris (Deep Aqua/Cyan Gradient) -->
+    <ellipse cx="202" cy="222" rx="28" ry="34" fill="url(#eyeIrisGrad)" />
+    <!-- Left Eye Pupil (Deep Obsidian) -->
+    <circle cx="204" cy="222" r="20" fill="#090d16" />
+    <!-- Left Eye Bottom Glow Crescent -->
+    <path d="M 188 238 C 196 250 216 250 224 238 C 218 244 198 244 188 238 Z" fill="#67e8f9" opacity="0.85" />
+    <!-- Left Eye Primary Sparkle Catchlight (Big) -->
+    <circle cx="193" cy="208" r="11" fill="#ffffff" />
+    <!-- Left Eye Secondary Twinkle (Medium) -->
+    <circle cx="216" cy="230" r="5.5" fill="#ffffff" />
+    <!-- Left Eye Tiny Star Dust Reflection -->
+    <circle cx="198" cy="236" r="2.5" fill="#ffffff" opacity="0.85" />
+
+    <!-- Right Eye Outer White Sclera -->
+    <ellipse
+      cx="298"
+      cy="222"
+      rx="38"
+      ry="44"
+      fill="#ffffff"
+      stroke="#022c22"
+      stroke-width="5"
+    />
+    <!-- Right Eye Iris (Deep Aqua/Cyan Gradient) -->
+    <ellipse cx="294" cy="222" rx="28" ry="34" fill="url(#eyeIrisGrad)" />
+    <!-- Right Eye Pupil (Deep Obsidian) -->
+    <circle cx="292" cy="222" r="20" fill="#090d16" />
+    <!-- Right Eye Bottom Glow Crescent -->
+    <path d="M 278 238 C 286 250 306 250 314 238 C 308 244 288 244 278 238 Z" fill="#67e8f9" opacity="0.85" />
+    <!-- Right Eye Primary Sparkle Catchlight (Big) -->
+    <circle cx="283" cy="208" r="11" fill="#ffffff" />
+    <!-- Right Eye Secondary Twinkle (Medium) -->
+    <circle cx="306" cy="230" r="5.5" fill="#ffffff" />
+    <!-- Right Eye Tiny Star Dust Reflection -->
+    <circle cx="288" cy="236" r="2.5" fill="#ffffff" opacity="0.85" />
+
+    <!-- Happy Eyebrows -->
+    <path d="M 166 172 Q 192 160 218 170" fill="none" stroke="#047857" stroke-width="4.5" stroke-linecap="round" />
+    <path d="M 276 170 Q 302 160 328 172" fill="none" stroke="#047857" stroke-width="4.5" stroke-linecap="round" />
+
+    <!-- Cute Smiling Monster Mouth -->
+    <!-- Mouth Cavity -->
+    <path
+      d="M 215 272 Q 248 308 280 272 C 265 270 230 270 215 272 Z"
+      fill="#9f1239"
+      stroke="#022c22"
+      stroke-width="4.5"
+      stroke-linejoin="round"
+    />
+    <!-- Joyful Pink Tongue -->
+    <path
+      d="M 230 286 C 238 302 258 302 265 286 C 255 283 240 283 230 286 Z"
+      fill="#fb7185"
+    />
+    <!-- Tiny Cute Baby Dragon Fang -->
+    <polygon points="228,272 234,282 240,272" fill="#ffffff" stroke="#022c22" stroke-width="1.5" />
+
+  </g>
+
+  <!-- ==================== 3. Candied Power Apple in Lap ==================== -->
+  <g filter="url(#appleGlow)" transform="translate(42, 10)">
+    <!-- Apple Leaf -->
+    <path
+      d="M 292 312 C 298 285 330 280 342 295 C 330 316 308 322 292 312 Z"
+      fill="#4ade80"
+      stroke="#065f46"
+      stroke-width="3"
+    />
+    <!-- Leaf Spine -->
+    <path d="M 298 310 Q 318 300 334 296" stroke="#bbf7d0" stroke-width="2" fill="none" stroke-linecap="round" />
+
+    <!-- Apple Stem -->
+    <path d="M 288 324 Q 282 305 292 295" stroke="#78350f" stroke-width="4" stroke-linecap="round" fill="none" />
+
+    <!-- Candied Red Apple Body -->
+    <path
+      d="M 286 322 C 268 312 240 325 240 355 C 240 395 278 418 288 420 C 298 418 336 395 336 355 C 336 325 306 312 288 322 Z"
+      fill="url(#appleGrad)"
+      stroke="#4c0519"
+      stroke-width="4.5"
+    />
+
+    <!-- Glaze Specular Shine Reflection -->
+    <ellipse cx="264" cy="345" rx="14" ry="8" fill="#ffffff" opacity="0.65" transform="rotate(-35 264 345)" />
+    <circle cx="254" cy="362" r="3.5" fill="#ffffff" opacity="0.75" />
+
+    <!-- Sparkle on the Apple -->
+    <polygon
+      points="315,340 320,344 326,344 321,348 323,354 318,350 313,354 315,348 310,344 316,344"
+      fill="#fef08a"
+      filter="url(#starGlow)"
+    />
+  </g>
+
+  <!-- ==================== 4. Ambient Sparkles & Star Burst ==================== -->
+  <g filter="url(#starGlow)">
+    <!-- Big 4-point Diamond Star next to Apple -->
+    <path
+      d="M 380 270 Q 380 286 364 286 Q 380 286 380 302 Q 380 286 396 286 Q 380 286 380 270 Z"
+      fill="#fde047"
+    />
+    <circle cx="380" cy="286" r="3.5" fill="#ffffff" />
+
+    <!-- Mini Star near Head Left -->
+    <path
+      d="M 120 200 Q 120 210 110 210 Q 120 210 120 220 Q 120 210 130 210 Q 120 210 120 200 Z"
+      fill="#67e8f9"
+    />
+  </g>
+
+  <!-- ==================== 5. Glassmorphic App Icon Frame Highlights ==================== -->
+  <!-- Top Specular Gloss Arc -->
+  <path
+    d="M 24 96 C 24 56 56 24 96 24 L 416 24 C 456 24 488 56 488 96 C 488 180 400 240 256 240 C 112 240 24 180 24 96 Z"
+    fill="url(#specularGrad)"
+    pointer-events="none"
+  />
+
+  <!-- Subtle Outer Border Accent -->
+  <rect
+    x="5"
+    y="5"
+    width="502"
+    height="502"
+    rx="113"
+    fill="none"
+    stroke="url(#iconBorderGrad)"
+    stroke-width="5"
+    pointer-events="none"
+  />
+</svg>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Terms of Service & Disclaimer - Snake Pro</title>
+  <meta name="description" content="Official Terms of Service and Legal Disclaimer for Snake Pro. Terms of use, virtual items policy, warranty disclaimer, and limitation of liability.">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <style>
+    :root {
+      --bg: #060914;
+      --card-bg: rgba(15, 23, 42, 0.92);
+      --border: rgba(56, 189, 248, 0.2);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #10b981;
+      --accent: #38bdf8;
+      --danger: #f43f5e;
+      --warning: #fbbf24;
+      --card-inner: #0b1329;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.65;
+      padding: 24px 16px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 28px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(12px);
+    }
+    header {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: 0.03em;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .updated {
+      font-size: 12px;
+      color: #64748b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .summary-box {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid var(--accent);
+      padding: 16px 18px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+    .disclaimer-summary-box {
+      background: rgba(244, 63, 94, 0.08);
+      border-left: 4px solid var(--danger);
+      padding: 16px 18px;
+      border-radius: 10px;
+      margin-bottom: 32px;
+      font-size: 13.5px;
+      color: #fecdd3;
+      line-height: 1.6;
+    }
+    .disclaimer-summary-box strong {
+      color: #fda4af;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13.5px;
+    }
+    section {
+      margin-bottom: 28px;
+      background: rgba(11, 19, 41, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+      border-radius: 16px;
+      padding: 20px 22px;
+    }
+    h2 {
+      font-size: 18px;
+      color: #38bdf8;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .disclaimer-section {
+      background: rgba(244, 63, 94, 0.05);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+    .disclaimer-section h2 {
+      color: #fb7185;
+      border-bottom-color: rgba(244, 63, 94, 0.25);
+    }
+    .sub-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    h3 {
+      font-size: 14px;
+      color: #e2e8f0;
+      margin-bottom: 8px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #38bdf8;
+      border-radius: 50%;
+    }
+    .disclaimer-section h3::before {
+      background: #f43f5e;
+    }
+    p {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+    ul {
+      padding-left: 20px;
+      margin-bottom: 8px;
+    }
+    li {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      line-height: 1.6;
+    }
+    a {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+    a:hover {
+      color: #7dd3fc;
+    }
+    .contact-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-top: 14px;
+      font-size: 13.5px;
+      color: #e2e8f0;
+    }
+    footer {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      color: #64748b;
+    }
+    .nav-links {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #f1f5f9;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 12.5px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .nav-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+    }
+    .nav-btn.primary {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: #34d399;
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">Snake Pro · Terms of Service</div>
+      <h1>Terms of Service & Disclaimer</h1>
+      <div class="subtitle">Snake Pro Terms of Use, Virtual Items Policy & Legal Disclaimer</div>
+      <div class="updated">Last Updated: October 19, 2026</div>
+    </header>
+
+    <div class="summary-box">
+      Welcome to Snake Pro ("the Game" or "the Service"). Before downloading, installing, accessing, or playing the Game, please read and understand these Terms of Service & Disclaimer ("Terms"). By accessing or playing Snake Pro, you agree to be legally bound by these Terms in full.
+    </div>
+
+    <div class="disclaimer-summary-box">
+      <strong>[IMPORTANT DISCLAIMER SUMMARY]</strong>
+      Snake Pro is provided strictly on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind. Gameplay progression and virtual items are stored locally on your device. The developer shall not be held liable for any loss of data, progress, or coins resulting from device malfunction, app deletion, cache clearing, or system updates. Please read Section 5 for the complete Legal Disclaimer.
+    </div>
+
+    <!-- Section 1 -->
+    <section>
+      <h2>1. Acceptance of Terms & Eligibility</h2>
+      <p>1.1 These Terms constitute a legally binding agreement between you ("Player" or "User") and the Snake Pro development team ("we", "us", or "our").</p>
+      <p>1.2 If you are under the legal age of majority in your jurisdiction, you must obtain permission and guidance from your parent or legal guardian to play the Game and agree to these Terms.</p>
+      <p>1.3 We reserve the right to revise or modify these Terms at any time. Continued use of the Game constitutes full acceptance of any updated terms.</p>
+    </section>
+
+    <!-- Section 2 -->
+    <section>
+      <h2>2. Limited License & Intellectual Property</h2>
+      <p>2.1 We grant you a personal, non-exclusive, non-transferable, revocable, limited license to download, install, and play Snake Pro solely for your personal, non-commercial entertainment.</p>
+      <p>2.2 All visual assets, skins, arena themes, code, sound effects, musical compositions, and the "Snake Pro" trademark are protected intellectual property owned by or licensed to us.</p>
+      <p>2.3 You agree not to reverse engineer, decompile, use automated scripts or cheat software, or commercially exploit any part of the Game. Any attempt to abuse the rewarded ad system, manipulate scores, or use unauthorized tools is strictly prohibited and may result in removal from the leaderboard.</p>
+    </section>
+
+    <!-- Section 3 -->
+    <section>
+      <h2>3. In-App Purchases (IAP) & Virtual Goods</h2>
+      <p>3.1 Virtual Goods: Hearts and coins are consumable virtual items. Unused hearts or coins have no cash value and are non-refundable except as required by the platform’s refund policy. Skins and cosmetic items are digital virtual goods solely for in-game entertainment and cannot be exchanged for cash or transferred between accounts.</p>
+      <p>3.2 Secure Billing: All purchases are processed directly and securely via Apple App Store (StoreKit) or Google Play Billing. We never collect or store your payment card or banking information.</p>
+      <p>3.3 Refund Policy: Except as mandated by applicable law or official Apple/Google store policies, all in-app purchase transactions are final and non-refundable.</p>
+      <p>3.4 No Restore Purchases: All in-app purchase products (Hearts and Coins) are consumable virtual goods. In accordance with app store billing guidelines, consumable items do not support and are not eligible for "Restore Purchases". All virtual goods and gameplay progress are stored locally on your device.</p>
+
+      <div class="sub-card">
+        <h3>Virtual Items & Progression Storage</h3>
+        <p>Consumable virtual items purchased in the game (such as Hearts and Coins), as well as game progress, skins, arenas, and related data, are stored primarily on your local device.</p>
+        <p>If you delete this App, clear App data/cache, change devices, or reinstall, the aforementioned consumable items and any progress not synchronized to the cloud cannot be restored.</p>
+      </div>
+    </section>
+
+    <!-- Section 4 -->
+    <section>
+      <h2>4. Third-Party Services & Advertising</h2>
+      <p>4.1 Snake Pro integrates Google AdMob for rewarded video advertisements and Google Firebase for cloud leaderboards.</p>
+      <p>4.2 Third-party advertisements are served by independent networks. We do not endorse and are not liable for any third-party websites, products, or services advertised.</p>
+      <p>4.3 Cloud leaderboards operate via Google Firebase Installation ID (FID) cryptographic technology, transmitting only anonymous scores and device identifiers.</p>
+    </section>
+
+    <!-- Section 5 -->
+    <section class="disclaimer-section">
+      <h2>5. LEGAL DISCLAIMER OF WARRANTIES (IMPORTANT)</h2>
+      <p style="color: #fda4af; font-weight: 700;">TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE FOLLOWING DISCLAIMER OF WARRANTIES APPLIES:</p>
+
+      <div class="sub-card">
+        <h3>5.1 Provided "AS IS" and "AS AVAILABLE"</h3>
+        <ul>
+          <li>Snake Pro and all associated features and content are provided strictly on an "AS IS" and "AS AVAILABLE" basis.</li>
+          <li>We disclaim all warranties of any kind, whether express, implied, statutory, or otherwise, including but not limited to implied warranties of merchantability, fitness for a particular purpose, non-infringement, accuracy, uninterrupted service, or freedom from software errors or bugs.</li>
+          <li>We do not guarantee that the Game will be compatible with all hardware devices or future operating system updates.</li>
+        </ul>
+      </div>
+
+      <div class="sub-card">
+        <h3>5.2 Local Storage & Data Loss Disclaimer</h3>
+        <ul>
+          <li>Game progress, high scores, unlocked skins, and virtual currency are stored primarily inside your local device sandbox (localStorage).</li>
+          <li>The developer shall NOT be liable for any loss of game progress, scores, or virtual items resulting from device loss, hardware damage, operating system upgrade, browser cache clearing, manual app data deletion, or uninstallation.</li>
+          <li>Players are responsible for managing their device storage and backups.</li>
+        </ul>
+      </div>
+
+      <div class="sub-card">
+        <h3>5.3 Network & Cloud Service Availability</h3>
+        <ul>
+          <li>Online leaderboard features rely on Google Cloud Firebase servers. We are not liable for network latency, server downtime, or inability to record scores due to internet service disruptions or maintenance.</li>
+        </ul>
+      </div>
+
+      <div class="sub-card">
+        <h3>5.4 Health, Ergonomics & Photosensitivity Warning</h3>
+        <ul>
+          <li>Gameplay involves animated visual movement, vibrant colors, and rapid turns. A small percentage of individuals may experience dizziness, fatigue, or photosensitive epileptic symptoms when viewing certain visual images.</li>
+          <li>If you experience any discomfort or dizziness, stop playing immediately and consult a physician.</li>
+          <li>The developer disclaims all liability for physical symptoms or eye strain arising from prolonged or continuous gameplay. Please take frequent breaks.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Section 6 -->
+    <section>
+      <h2>6. Limitation of Liability</h2>
+      <p>6.1 In no event shall the developer, creators, or affiliates be liable for any indirect, incidental, consequential, special, punitive, or exemplary damages (including lost profits, lost data, hardware damage, or business disruption) arising out of or in connection with your use of Snake Pro.</p>
+      <p>6.2 Under all circumstances, our maximum aggregate liability to you shall not exceed the total amount paid by you in the Game during the prior three (3) months, or $10.00 USD, whichever is greater.</p>
+    </section>
+
+    <!-- Section 7 -->
+    <section>
+      <h2>7. Service Modifications & Termination</h2>
+      <p>7.1 We reserve the right to update, modify, balance, or discontinue any aspect of the Game at any time without prior liability.</p>
+      <p>7.2 Any attempt to abuse the rewarded ad system, manipulate scores, or use unauthorized tools is strictly prohibited and may result in removal from the leaderboard. We reserve the right to restrict or terminate access for any player who engages in cheating, exploiting, or violating these Terms.</p>
+    </section>
+
+    <!-- Section 8 -->
+    <section>
+      <h2>8. Governing Law & Contact Information</h2>
+      <p>8.1 These Terms are governed by the laws applicable in the place where the dispute arises, to the maximum extent permitted by law. Any dispute shall first be attempted to be resolved amicably.</p>
+      <p>8.2 For questions, support, or legal inquiries, please contact our team at:</p>
+
+      <div class="contact-box">
+        <strong>Developer Support & Legal Contact:</strong> <a href="mailto:elemall.uk@gmail.com">elemall.uk@gmail.com</a>
+      </div>
+    </section>
+
+    <footer>
+      <p>© 2026 Snake Pro. All rights reserved.</p>
+    </footer>
+  </div>
+</body>
+</html>

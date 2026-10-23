@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Privacy Policy - Snake Pro</title>
+  <meta name="description" content="Official Privacy Policy for Snake Pro. Data protection, privacy commitment, third-party services, and user rights.">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <style>
+    :root {
+      --bg: #060914;
+      --card-bg: rgba(15, 23, 42, 0.92);
+      --border: rgba(56, 189, 248, 0.2);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #10b981;
+      --accent: #38bdf8;
+      --card-inner: #0b1329;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.65;
+      padding: 24px 16px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 28px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(12px);
+    }
+    header {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: 0.03em;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .updated {
+      font-size: 12px;
+      color: #64748b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .summary-box {
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 4px solid var(--primary);
+      padding: 16px 18px;
+      border-radius: 10px;
+      margin-bottom: 32px;
+      font-size: 14px;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+    section {
+      margin-bottom: 28px;
+      background: rgba(11, 19, 41, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+      border-radius: 16px;
+      padding: 20px 22px;
+    }
+    h2 {
+      font-size: 18px;
+      color: #38bdf8;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sub-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    h3 {
+      font-size: 14px;
+      color: #e2e8f0;
+      margin-bottom: 8px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #34d399;
+      border-radius: 50%;
+    }
+    p {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+    ul {
+      padding-left: 20px;
+      margin-bottom: 8px;
+    }
+    li {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      line-height: 1.6;
+    }
+    li strong {
+      color: #e2e8f0;
+    }
+    a {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+    a:hover {
+      color: #7dd3fc;
+    }
+    .guide-section {
+      background: rgba(245, 158, 11, 0.05);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .guide-section h2 {
+      color: #fbbf24;
+      border-bottom-color: rgba(245, 158, 11, 0.2);
+    }
+    .step-item {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 24px;
+      height: 24px;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-content strong {
+      display: block;
+      color: #f1f5f9;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+    .step-content p {
+      font-size: 12.5px;
+      color: #94a3b8;
+      margin: 0;
+    }
+    .contact-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-top: 14px;
+      font-size: 13.5px;
+      color: #e2e8f0;
+    }
+    footer {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      color: #64748b;
+    }
+    .nav-links {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #f1f5f9;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 12.5px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .nav-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+    }
+    .nav-btn.primary {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: #34d399;
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">Snake Pro · Privacy Policy</div>
+      <h1>Privacy Policy</h1>
+      <div class="subtitle">Snake Pro · Commitment to Data Privacy & Security</div>
+      <div class="updated">Last Updated: October 19, 2026</div>
+    </header>
+
+    <div class="summary-box">
+      Welcome to Snake Pro! We value and respect your privacy. This policy explains what information is collected, how it is used, and how third-party services (such as Google AdMob and Firebase) operate within the game. We never sell your personal data.
+    </div>
+
+    <!-- Section 1 -->
+    <section>
+      <h2>1. Information We Collect and Store</h2>
+      <p>Snake Pro operates primarily on local device storage (localStorage) and only connects to cloud servers for online leaderboards:</p>
+      
+      <div class="sub-card">
+        <h3>1. Local Game Progression (Non-Personal)</h3>
+        <ul>
+          <li>Coins earned, completed stages, and stamina refill timers.</li>
+          <li>Unlocked snake skins, arena themes, and achievement rewards.</li>
+          <li>Sound effects and BGM volume states, preferred UI language.</li>
+          <li>This data is stored purely inside your device sandbox and is never tied to your real-world identity.</li>
+        </ul>
+      </div>
+
+      <div class="sub-card">
+        <h3>2. Leaderboard & Anonymous Identifier</h3>
+        <ul>
+          <li>When you submit high scores to the global leaderboard, only your encrypted anonymous device identifier and score are transmitted.</li>
+          <li>We use official Google Firebase Installation ID (FID) as the cryptographic anonymous device identifier to isolate records, with no personal identification like full name, phone number, or home address.</li>
+          <li>Leaderboard scores and associated anonymous identifiers are retained for as long as the leaderboard feature is active, or until you request deletion.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Section 2 -->
+    <section>
+      <h2>2. Third-Party Services & Advertising</h2>
+      <p>To provide free content and online leaderboards, this application integrates trusted third-party SDKs:</p>
+      
+      <div class="sub-card">
+        <h3>1. Google AdMob (Advertising)</h3>
+        <ul>
+          <li>We use Google AdMob to deliver opt-in rewarded video ads (e.g. watch an ad to refill hearts/stamina, up to 5 per day).</li>
+          <li>Google AdMob SDK may collect device identifiers (such as Google Advertising ID or iOS IDFA when authorized), approximate IP location, and ad impression data for ad delivery and fraud prevention.</li>
+          <li>Review Google Privacy Policy: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">https://policies.google.com/privacy</a></li>
+        </ul>
+      </div>
+
+      <div class="sub-card">
+        <h3>2. Google Firebase (Cloud Database)</h3>
+        <ul>
+          <li>We utilize Google Cloud Firebase Firestore to power our global leaderboards for Endless, Levels, and Time Attack modes.</li>
+          <li>Only anonymous scores, timestamps, and encrypted anonymous device identifiers are stored.</li>
+        </ul>
+      </div>
+
+      <div class="sub-card">
+        <h3>3. In-App Purchases (Apple App Store & Google Play)</h3>
+        <ul>
+          <li>All in-app purchases are securely processed directly by Apple App Store (StoreKit) or Google Play Billing.</li>
+          <li>We do not collect or have access to your credit card, bank, or billing information. All in-app purchase items (Hearts and Coins) are consumable virtual goods stored locally on your device, and do not support or require Restore Purchases.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Section 3 -->
+    <section>
+      <h2>3. How We Use Information</h2>
+      <p>The data collected is used solely to:</p>
+      <ul>
+        <li>• Deliver game mechanics, persist progression, and unlock achievements.</li>
+        <li>• Maintain fair, competitive global leaderboards.</li>
+        <li>• Prevent cheating and ensure server integrity.</li>
+      </ul>
+    </section>
+
+    <!-- Section 4 -->
+    <section>
+      <h2>4. Children’s Privacy (COPPA & GDPR-K Compliance)</h2>
+      <p>Snake Pro is designed for general audiences and all ages. We comply with the Children’s Online Privacy Protection Act (COPPA):</p>
+      <ul>
+        <li>• We do not knowingly collect personal identifiable information from children under 13.</li>
+        <li>• If a parent or guardian discovers that their child has provided data without consent, please contact us and we will promptly delete it.</li>
+      </ul>
+    </section>
+
+    <!-- Section 5 -->
+    <section>
+      <h2>5. Your Rights and Data Controls</h2>
+      <p>You retain full control over your gameplay data:</p>
+      <ul>
+        <li>• <strong>Reset Data:</strong> You can clear all saved data directly from the game Settings or your browser cache.</li>
+        <li>• <strong>Limit Ad Tracking:</strong> You can reset your Advertising ID or opt-out of personalized ads via your device OS settings (Settings > Privacy on iOS or Settings > Google > Ads on Android).</li>
+        <li>• <strong>Leaderboard Removal:</strong> You can instantly erase your cloud scores directly from the Data Management tab, or contact us at any time.</li>
+      </ul>
+    </section>
+
+    <!-- Section 6 -->
+    <section>
+      <h2>6. Updates and Contact Information</h2>
+      <p>We may update this policy periodically to reflect game updates or regulatory requirements. Any modifications will be posted here with an updated revision date.</p>
+      <p>If you have any questions or requests regarding your privacy, please contact:</p>
+      
+      <div class="contact-box">
+        <strong>Developer Contact Email:</strong> <a href="mailto:elemall.uk@gmail.com">elemall.uk@gmail.com</a>
+      </div>
+    </section>
+
+    <!-- Bonus in-app guide: How to Turn Off Personalized Ad Tracking -->
+    <section class="guide-section">
+      <h2>How to Turn Off Personalized Ad Tracking</h2>
+      <p>If you wish to opt-out of personalized advertisement tracking, you can configure your device operating system at any time:</p>
+
+      <div class="sub-card">
+        <h3 style="color: #fbbf24;">iOS (iPhone / iPad)</h3>
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>Open iPhone Settings</strong>
+            <p>Open the "Settings" app on your home screen.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>Select Privacy & Security</strong>
+            <p>Scroll down and tap "Privacy & Security" ("Privacy" on iOS 15 or earlier).</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>Tap Tracking & Turn Off Requests</strong>
+            <p>Tap "Tracking" and toggle off "Allow Apps to Request to Track". All tracking requests from apps will be automatically declined.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>Turn Off Apple Personalized Ads</strong>
+            <p>Return to Privacy & Security, tap "Apple Advertising" at the bottom, and turn off "Personalized Ads".</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-card">
+        <h3 style="color: #fbbf24;">Android Devices</h3>
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>Open Android Settings</strong>
+            <p>Open "Settings" on your phone.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>Tap Google Services</strong>
+            <p>Find and tap "Google" or "Google Services".</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>Select Ads</strong>
+            <p>Tap "Ads" or "Privacy > Ads".</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <strong>Reset or Delete Advertising ID</strong>
+            <p>Tap "Delete advertising ID" (Android 12+) or toggle "Opt out of Ads Personalization".</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p>© 2026 Snake Pro. All rights reserved.</p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overscroll-behavior: none;
+    background-color: #060914;
+    background-image: url('/assets/neon_digital_grid_bg.svg');
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overscroll-behavior: none;
+    background-color: #060914;
+    background-image: url('/assets/neon_digital_grid_bg.svg');
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    color: #f1f5f9;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  #root {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    min-height: 100%;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+    overscroll-behavior: none;
+    display: flex;
+    flex-direction: column;
+    background-color: #060914;
+    background-image: url('/assets/neon_digital_grid_bg.svg');
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+  }
+}
+
+/* 1. Neon Digital Grid Background (1. Neon Digital Grid 蜂巢賽博格網) */
+.neon-digital-bg {
+  background-color: #060914;
+  background-image: url('/assets/neon_digital_grid_bg.svg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Subtle neon glow utility */
+.neon-glow-cyan {
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.4), 0 0 30px rgba(56, 189, 248, 0.2);
+}
+
+.neon-border-cyan {
+  border-color: rgba(56, 189, 248, 0.7);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+/* Legacy pattern */
+.candy-bg-pattern {
+  background-color: #060914;
+  background-image: url('/assets/neon_digital_grid_bg.svg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Floating animation for background elements */
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(3deg);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.08);
+  }
+}
+
+.animate-float-gentle {
+  animation: floatGentle 6s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+/* Candy Crush & Tsum Tsum 3D glossy button styling */
+.btn-candy {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25), 0 6px 16px rgba(244, 63, 94, 0.35);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-candy::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.btn-candy:active {
+  transform: translateY(2px) scale(0.98);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 2px 8px rgba(244, 63, 94, 0.25);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Touch and smooth scrolling utilities */
+.touch-pan-y {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Custom sleek scrollbar for scroll areas */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Hatching Shell Keyframes */
+@keyframes eggWobble {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-8deg) scale(1.04); }
+  75% { transform: rotate(8deg) scale(1.04); }
+}
+
+@keyframes shellLeftBreak {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  50% { transform: translate(-30px, -20px) rotate(-35deg); opacity: 0.9; }
+  100% { transform: translate(-70px, 60px) rotate(-65deg); opacity: 0; }
+}
+
+@keyframes shellRightBreak {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  50% { transform: translate(30px, -20px) rotate(35deg); opacity: 0.9; }
+  100% { transform: translate(70px, 60px) rotate(65deg); opacity: 0; }
+}
+
+@keyframes snakeEmerge {
+  0% { transform: scale(0.2) translateY(50px); opacity: 0; }
+  45% { transform: scale(1.18) translateY(-18px); opacity: 1; }
+  70% { transform: scale(0.95) translateY(4px); }
+  100% { transform: scale(1.05) translateY(0); opacity: 1; }
+}
+
+@keyframes shockwave {
+  0% { transform: scale(0.3); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(251, 191, 36, 0.65);
+}
+
