@@ -171,7 +171,15 @@ jobs:
               require "base64"
 
               # 3. Retrieve or import Apple Distribution Certificate
-              if ENV["BUILD_CERTIFICATE_BASE64"] && !ENV["BUILD_CERTIFICATE_BASE64"].strip.empty?
+              if File.exist?("/tmp/SnakeProSigning.p12")
+                UI.message("Found cached signing certificate! Importing /tmp/SnakeProSigning.p12...")
+                import_certificate(
+                  certificate_path: "/tmp/SnakeProSigning.p12",
+                  certificate_password: keychain_pwd,
+                  keychain_path: keychain_path,
+                  keychain_password: keychain_pwd
+                )
+              elsif ENV["BUILD_CERTIFICATE_BASE64"] && !ENV["BUILD_CERTIFICATE_BASE64"].strip.empty?
                 UI.message("Found BUILD_CERTIFICATE_BASE64 secret! Importing existing Distribution Certificate...")
                 p12_path = "/tmp/distribution.p12"
                 File.binwrite(p12_path, Base64.decode64(ENV["BUILD_CERTIFICATE_BASE64"].strip))
@@ -183,11 +191,34 @@ jobs:
                 )
               else
                 UI.message("Retrieving or generating certificate via App Store Connect API...")
+                # Auto-cleanup orphaned certificates if 2-certificate limit reached
+                begin
+                  existing_certs = Spaceship::ConnectAPI::Certificate.all(filter: { certificateType: "DISTRIBUTION,IOS_DISTRIBUTION" })
+                  if existing_certs && existing_certs.count >= 2
+                    UI.message("Found #{existing_certs.count} existing Distribution certificates on Apple Developer. Checking local keychain...")
+                    identities = sh("security find-identity -v -p codesigning '#{keychain_path}' || true").strip
+                    has_matching_key = existing_certs.any? { |c| identities.include?(c.id) || identities.include?(c.serial_number.to_s) }
+                    unless has_matching_key
+                      UI.important("No private key found locally for the #{existing_certs.count} existing certificates. Auto-revoking orphaned certificates...")
+                      existing_certs.each do |c|
+                        UI.message("Revoking orphaned certificate: #{c.id} (#{c.name})")
+                        c.delete! rescue nil
+                      end
+                      sleep(2)
+                    end
+                  end
+                rescue => e
+                  UI.important("Certificate cleanup notice: #{e.message}")
+                end
+
                 get_certificates(
                   api_key: api_key,
                   keychain_path: keychain_path,
                   keychain_password: keychain_pwd
                 )
+
+                # Export newly generated certificate and private key to a reusable .p12 backup
+                sh("security export -k '#{keychain_path}' -t all -f pkcs12 -P '#{keychain_pwd}' -o /tmp/SnakeProSigning.p12") rescue nil
               end
 
               # Grant codesign permission to private key without interactive prompt
@@ -248,6 +279,13 @@ jobs:
           end
           EOF
 
+      - name: Restore Signing Certificate Cache
+        uses: actions/cache@v4
+        id: cert-cache
+        with:
+          path: /tmp/SnakeProSigning.p12
+          key: snake-signing-cert-${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}
+
       - name: Run Fastlane Release (Codesign, Build & Upload)
         env:
           CI: "true"
@@ -262,6 +300,13 @@ jobs:
         run: |
           cd ios/App
           fastlane release
+
+      - name: Save Signing Certificate Cache
+        uses: actions/cache/save@v4
+        if: always() && hashFiles('/tmp/SnakeProSigning.p12') != ''
+        with:
+          path: /tmp/SnakeProSigning.p12
+          key: snake-signing-cert-${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}
 
       - name: Backup Generated Certificates & Profiles
         if: always()
