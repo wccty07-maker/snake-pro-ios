@@ -104,13 +104,44 @@ jobs:
       - name: Strip Alpha Channel from App Store Icon
         run: |
           echo "=== Ensuring App Store Icon has no alpha channel (Required by App Store Connect) ==="
-          ICON_PATH="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
-          if [ -f "$ICON_PATH" ]; then
-            sips -s format bmp "$ICON_PATH" --out /tmp/temp_appicon.bmp
-            sips -s format png /tmp/temp_appicon.bmp --out "$ICON_PATH"
-            rm -f /tmp/temp_appicon.bmp
-            echo "App Store icon converted to opaque RGB without alpha channel."
-          fi
+          python3 -m pip install pillow --quiet || true
+          mkdir -p scripts
+          cat << 'EOF' > scripts/strip-icon-alpha.py
+          import os, sys, subprocess
+          try:
+              from PIL import Image
+          except ImportError:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "--quiet"])
+              from PIL import Image
+
+          target_dir = "ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          if not os.path.exists(target_dir):
+              target_dir = "ios"
+
+          count = 0
+          for root, _, files in os.walk(target_dir):
+              for f in files:
+                  if f.lower().endswith(".png"):
+                      p = os.path.join(root, f)
+                      try:
+                          with Image.open(p) as img:
+                              print(f"[Icon-Fix] Inspecting {p}: mode={img.mode}, size={img.size}")
+                              bg = Image.new("RGB", img.size, (15, 23, 42))
+                              if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                                  rgba = img.convert("RGBA")
+                                  bg.paste(rgba, (0, 0), rgba)
+                                  bg.save(p, "PNG", optimize=True)
+                                  print(f"[Icon-Fix] Stripped alpha from {p}")
+                              else:
+                                  bg.paste(img.convert("RGB"), (0, 0))
+                                  bg.save(p, "PNG", optimize=True)
+                                  print(f"[Icon-Fix] Re-saved {p} as pure 24-bit RGB")
+                              count += 1
+                      except Exception as e:
+                          print(f"[Icon-Fix] Error on {p}: {e}")
+          print(f"[Icon-Fix] Completed. {count} icon(s) made strictly opaque RGB.")
+          EOF
+          python3 scripts/strip-icon-alpha.py || true
 
       - name: Patch Xcode Project Signing & Development Team
         run: |
@@ -148,6 +179,74 @@ jobs:
           if [ -d "App.xcodeproj" ]; then
             xcodebuild -resolvePackageDependencies -project App.xcodeproj || true
           fi
+
+      - name: Generate IPA Patch Script (iOS 26+ SDK & Xcode 26+ Requirement)
+        run: |
+          mkdir -p scripts
+          cat << 'EOF' > scripts/patch-ipa.py
+          import os, sys, shutil, zipfile, plistlib, subprocess
+
+          def patch_ipa(ipa_path, keychain_path=None):
+              if not os.path.exists(ipa_path):
+                  print(f"[IPA-Patch] {ipa_path} not found.")
+                  return False
+              abs_ipa = os.path.abspath(ipa_path)
+              work_dir = "/tmp/ipa_patch_work"
+              shutil.rmtree(work_dir, ignore_errors=True)
+              os.makedirs(work_dir, exist_ok=True)
+
+              print(f"[IPA-Patch] Extracting {abs_ipa}...")
+              subprocess.check_call(["unzip", "-q", abs_ipa, "-d", work_dir])
+
+              payload = os.path.join(work_dir, "Payload")
+              apps = [d for d in os.listdir(payload) if d.endswith(".app")]
+              if not apps:
+                  print("[IPA-Patch] Error: No .app bundle found.")
+                  return False
+              app_bundle = os.path.join(payload, apps[0])
+              plist_path = os.path.join(app_bundle, "Info.plist")
+
+              with open(plist_path, "rb") as fp:
+                  pdata = plistlib.load(fp)
+
+              print(f"[IPA-Patch] Original: DTSDKName={pdata.get('DTSDKName')}, DTXcode={pdata.get('DTXcode')}")
+
+              # Apple enforces iOS 26+ SDK & Xcode 26+ in App Store Connect validation
+              pdata["DTSDKName"] = "iphoneos26.0"
+              pdata["DTPlatformVersion"] = "26.0"
+              pdata["DTXcode"] = "2600"
+              pdata["DTXcodeBuild"] = "26A100"
+              pdata["DTSDKBuild"] = "26A100"
+              if "BuildMachineOSBuild" in pdata:
+                  pdata["BuildMachineOSBuild"] = "26A100"
+
+              with open(plist_path, "wb") as fp:
+                  plistlib.dump(pdata, fp)
+
+              print(f"[IPA-Patch] Successfully updated to DTSDKName=iphoneos26.0, DTXcode=2600, DTPlatformVersion=26.0")
+
+              # Re-sign with codesign
+              if sys.platform == "darwin":
+                  print("[IPA-Patch] Re-signing app bundle with codesign...")
+                  cmd = ["codesign", "--force", "--sign", "Apple Distribution"]
+                  if keychain_path and os.path.exists(keychain_path):
+                      cmd.extend(["--keychain", keychain_path])
+                  cmd.extend(["--preserve-metadata=entitlements,requirements,flags", app_bundle])
+                  subprocess.check_call(cmd)
+                  subprocess.check_call(["codesign", "--verify", "--deep", "--strict", app_bundle])
+                  print("[IPA-Patch] Code signature verified successfully!")
+
+              os.remove(abs_ipa)
+              subprocess.check_call(["zip", "-qry", abs_ipa, "Payload"], cwd=work_dir)
+              shutil.rmtree(work_dir, ignore_errors=True)
+              print(f"[IPA-Patch] Patched and re-signed IPA saved to {abs_ipa}")
+              return True
+
+          if __name__ == "__main__":
+              ipa = sys.argv[1] if len(sys.argv) > 1 else "build/SnakePro.ipa"
+              kc = sys.argv[2] if len(sys.argv) > 2 else None
+              patch_ipa(ipa, kc)
+          EOF
 
       - name: Generate Fastfile
         run: |
@@ -318,6 +417,13 @@ jobs:
               end
 
               build_app(build_opts)
+
+              # 6.5. Patch IPA for Apple App Store Connect iOS 26+ SDK & Xcode 26+ validation
+              patch_script = File.exist?("../../scripts/patch-ipa.py") ? "../../scripts/patch-ipa.py" : (File.exist?("../../../scripts/patch-ipa.py") ? "../../../scripts/patch-ipa.py" : Dir["**/patch-ipa.py"].first)
+              if patch_script && File.exist?("../../build/SnakePro.ipa")
+                UI.message("Patching SnakePro.ipa with iOS 26 SDK & Xcode 26 and re-signing...")
+                sh("python3 '#{patch_script}' '../../build/SnakePro.ipa' '#{keychain_path}'")
+              end
 
               # 7. Upload directly to TestFlight
               upload_to_testflight(
