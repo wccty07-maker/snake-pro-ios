@@ -97,6 +97,10 @@ jobs:
           ls -la ios/App/
           find ios/App -maxdepth 2 -name "*.xcodeproj" -o -name "*.xcworkspace"
 
+      - name: Patch Xcode Project Signing & Development Team
+        run: |
+          python3 scripts/patch-xcode-signing.py "ios/App/App.xcodeproj/project.pbxproj" "${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}"
+
       - name: Set up Ruby & Fastlane
         uses: ruby/setup-ruby@v1
         with:
@@ -195,29 +199,13 @@ jobs:
                 app_identifier: "elemall.snakegame.1"
               )
 
-              team_id = ENV["APPLE_TEAM_ID"] || lane_context[SharedValues::SIGH_TEAM_ID]
+              team_id = ENV["APPLE_TEAM_ID"] || lane_context[SharedValues::SIGH_TEAM_ID] || "N2S5289QDM"
               profile_name = lane_context[SharedValues::SIGH_NAME] || "elemall.snakegame.1 AppStore"
               UI.message("Apple Developer Team ID: #{team_id}")
               UI.message("Using provisioning profile: #{profile_name}")
 
               # 5. Patch project.pbxproj to ensure manual signing & development team match
-              pbxproj_path = "App.xcodeproj/project.pbxproj"
-              if File.exist?(pbxproj_path)
-                content = File.read(pbxproj_path)
-                if team_id && !team_id.empty?
-                  if content.include?("DEVELOPMENT_TEAM")
-                    content.gsub!(/DEVELOPMENT_TEAM\s*=\s*[^;]*;/, "DEVELOPMENT_TEAM = #{team_id};")
-                  else
-                    content.gsub!(/(PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;)/, "\\1\n\t\t\t\tDEVELOPMENT_TEAM = #{team_id};")
-                  end
-                end
-                if content.include?("CODE_SIGN_STYLE")
-                  content.gsub!(/CODE_SIGN_STYLE\s*=\s*[^;]*;/, "CODE_SIGN_STYLE = Manual;")
-                else
-                  content.gsub!(/(PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;)/, "\\1\n\t\t\t\tCODE_SIGN_STYLE = Manual;")
-                end
-                File.write(pbxproj_path, content)
-              end
+              sh("python3 ../../scripts/patch-xcode-signing.py App.xcodeproj/project.pbxproj #{team_id}") rescue nil
 
               # 6. Detect workspace or project dynamically
               workspace_file = Dir["*.xcworkspace"].reject { |w| w.include?("project.xcworkspace") }.first
