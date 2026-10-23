@@ -5,6 +5,7 @@ import sys
 
 pbxproj_path = sys.argv[1] if len(sys.argv) > 1 else 'ios/App/App.xcodeproj/project.pbxproj'
 team_id = sys.argv[2] if len(sys.argv) > 2 else os.environ.get('APPLE_TEAM_ID', 'N2S5289QDM')
+profile_name = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('PROVISIONING_PROFILE_NAME', '')
 
 if not os.path.exists(pbxproj_path):
     print(f"Error: {pbxproj_path} not found")
@@ -13,18 +14,16 @@ if not os.path.exists(pbxproj_path):
 with open(pbxproj_path, 'r', encoding='utf-8') as f:
     content = f.read()
 
-print(f"Patching {pbxproj_path} with Development Team: {team_id}")
+print(f"Patching {pbxproj_path} with Development Team: {team_id}, Profile: {profile_name or 'Auto/None'}")
 
 # 1. Patch TargetAttributes in PBXProject to set DevelopmentTeam and ProvisioningStyle = Manual
 def patch_target_attributes(match):
     block = match.group(0)
-    # Check if DevelopmentTeam is present
     if 'DevelopmentTeam =' in block:
         block = re.sub(r'DevelopmentTeam\s*=\s*[^;]+;', f'DevelopmentTeam = {team_id};', block)
     else:
         block = re.sub(r'(\s*CreatedOnToolsVersion\s*=\s*[^;]+;)', f'\\1\n\t\t\t\t\t\tDevelopmentTeam = {team_id};', block)
     
-    # Set ProvisioningStyle to Manual
     if 'ProvisioningStyle =' in block:
         block = re.sub(r'ProvisioningStyle\s*=\s*[^;]+;', 'ProvisioningStyle = Manual;', block)
     else:
@@ -49,6 +48,23 @@ def patch_build_settings(match):
     else:
         settings = settings.rstrip() + '\n\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t'
 
+    # Set CODE_SIGN_IDENTITY to Apple Distribution
+    if 'CODE_SIGN_IDENTITY' in settings:
+        settings = re.sub(r'CODE_SIGN_IDENTITY\s*=\s*[^;]+;', 'CODE_SIGN_IDENTITY = "Apple Distribution";', settings)
+    else:
+        settings = settings.rstrip() + '\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n\t\t\t'
+
+    # Add SDK-specific identity if not present
+    if '"CODE_SIGN_IDENTITY[sdk=iphoneos*]"' not in settings:
+        settings = settings.rstrip() + '\n\t\t\t\t"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";\n\t\t\t'
+
+    # If profile_name is specified, inject PROVISIONING_PROFILE_SPECIFIER
+    if profile_name:
+        if 'PROVISIONING_PROFILE_SPECIFIER' in settings:
+            settings = re.sub(r'PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]+;', f'PROVISIONING_PROFILE_SPECIFIER = "{profile_name}";', settings)
+        else:
+            settings = settings.rstrip() + f'\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile_name}";\n\t\t\t'
+
     return f'buildSettings = {{{settings}}};'
 
 content = re.sub(r'buildSettings\s*=\s*\{([\s\S]*?)\};', patch_build_settings, content)
@@ -56,4 +72,4 @@ content = re.sub(r'buildSettings\s*=\s*\{([\s\S]*?)\};', patch_build_settings, c
 with open(pbxproj_path, 'w', encoding='utf-8') as f:
     f.write(content)
 
-print(f"Successfully patched {pbxproj_path} with DevelopmentTeam={team_id} and Manual signing!")
+print(f"Successfully patched {pbxproj_path} with DevelopmentTeam={team_id}, Manual signing, Apple Distribution, and Profile={profile_name}!")
