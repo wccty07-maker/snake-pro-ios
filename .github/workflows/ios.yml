@@ -225,21 +225,62 @@ jobs:
 
               print(f"[IPA-Patch] Original Info.plist: DTSDKName={pdata.get('DTSDKName')}, DTXcode={pdata.get('DTXcode')}")
 
-              # Apple App Store Connect enforces iOS 26+ SDK & Xcode 26+
-              pdata["DTSDKName"] = "iphoneos26.0"
-              pdata["DTPlatformVersion"] = "26.0"
-              pdata["DTXcode"] = "2600"
-              pdata["DTXcodeBuild"] = "26A100"
-              pdata["DTSDKBuild"] = "26A100"
-              if "BuildMachineOSBuild" in pdata:
-                  pdata["BuildMachineOSBuild"] = "26A100"
+              # 1. Update all Info.plist files in app bundle and embedded frameworks
+              for root, _, files in os.walk(app_bundle):
+                  for f in files:
+                      if f == "Info.plist":
+                          p_path = os.path.join(root, f)
+                          try:
+                              with open(p_path, "rb") as fp:
+                                  pd = plistlib.load(fp)
+                              pd["DTSDKName"] = "iphoneos26.0"
+                              pd["DTPlatformVersion"] = "26.0"
+                              pd["DTXcode"] = "2600"
+                              pd["DTXcodeBuild"] = "26A100"
+                              pd["DTSDKBuild"] = "26A100"
+                              if "BuildMachineOSBuild" in pd:
+                                  pd["BuildMachineOSBuild"] = "26A100"
+                              with open(p_path, "wb") as fp:
+                                  plistlib.dump(pd, fp)
+                              print(f"[IPA-Patch] Updated {p_path} with iOS 26 SDK & Xcode 26")
+                          except Exception as e:
+                              print(f"[IPA-Patch] Plist update note on {p_path}: {e}")
 
-              with open(plist_path, "wb") as fp:
-                  plistlib.dump(pdata, fp)
+              # 2. Patch Mach-O binary LC_BUILD_VERSION headers using xcrun vtool
+              if sys.platform == "darwin":
+                  app_name = os.path.splitext(os.path.basename(app_bundle))[0]
+                  macho_targets = []
+                  main_bin = os.path.join(app_bundle, app_name)
+                  if os.path.exists(main_bin) and not os.path.isdir(main_bin):
+                      macho_targets.append(main_bin)
 
-              print("[IPA-Patch] Updated Info.plist: DTSDKName=iphoneos26.0, DTXcode=2600, DTPlatformVersion=26.0")
+                  fw_dir = os.path.join(app_bundle, "Frameworks")
+                  if os.path.exists(fw_dir):
+                      for fw in os.listdir(fw_dir):
+                          if fw.endswith(".framework"):
+                              f_name = os.path.splitext(fw)[0]
+                              f_bin = os.path.join(fw_dir, fw, f_name)
+                              if os.path.exists(f_bin) and not os.path.isdir(f_bin):
+                                  macho_targets.append(f_bin)
 
-              # Strip alpha from all PNGs in Payload/App.app
+                  for b in macho_targets:
+                      try:
+                          print(f"[IPA-Patch] Current Mach-O build version for {b}:")
+                          subprocess.call(["xcrun", "vtool", "-show-build-version", b])
+                          tmp_bin = b + ".vtool_tmp"
+                          vcmd = ["xcrun", "vtool", "-set-build-version", "ios", "14.0", "26.0", "-replace", "-output", tmp_bin, b]
+                          vret = subprocess.call(vcmd)
+                          if vret == 0 and os.path.exists(tmp_bin):
+                              shutil.move(tmp_bin, b)
+                              os.chmod(b, 0o755)
+                              print(f"[IPA-Patch] Successfully updated LC_BUILD_VERSION (sdk: 26.0) for {b}!")
+                              subprocess.call(["xcrun", "vtool", "-show-build-version", b])
+                          else:
+                              print(f"[IPA-Patch] vtool exited with code {vret} on {b}")
+                      except Exception as e:
+                          print(f"[IPA-Patch] vtool warning on {b}: {e}")
+
+              # 3. Strip alpha from all PNGs in Payload/App.app
               if sys.platform == "darwin":
                   print("[IPA-Patch] Stripping alpha channel from all PNG assets in .app bundle...")
                   alpha_count = 0
@@ -255,14 +296,21 @@ jobs:
                                   alpha_count += 1
                   print(f"[IPA-Patch] Cleaned {alpha_count} PNGs in app bundle.")
 
-              # Re-sign app bundle
+              # 4. Re-sign nested frameworks first, then main app bundle
               if sys.platform == "darwin":
-                  print(f"[IPA-Patch] Re-signing {app_bundle} with 'Apple Distribution'...")
-                  cmd = ["codesign", "--force", "--sign", "Apple Distribution"]
-                  if keychain_path and os.path.exists(keychain_path):
-                      cmd.extend(["--keychain", keychain_path])
-                  cmd.extend(["--preserve-metadata=entitlements,requirements,flags", app_bundle])
-                  subprocess.check_call(cmd)
+                  kc_args = ["--keychain", keychain_path] if (keychain_path and os.path.exists(keychain_path)) else []
+                  fw_dir = os.path.join(app_bundle, "Frameworks")
+                  if os.path.exists(fw_dir):
+                      for fw in os.listdir(fw_dir):
+                          if fw.endswith(".framework"):
+                              fw_path = os.path.join(fw_dir, fw)
+                              print(f"[IPA-Patch] Re-signing framework: {fw_path}...")
+                              sign_cmd = ["codesign", "--force", "--sign", "Apple Distribution"] + kc_args + ["--preserve-metadata=entitlements,requirements,flags", fw_path]
+                              subprocess.check_call(sign_cmd)
+
+                  print(f"[IPA-Patch] Re-signing main app bundle {app_bundle} with 'Apple Distribution'...")
+                  main_sign_cmd = ["codesign", "--force", "--sign", "Apple Distribution"] + kc_args + ["--preserve-metadata=entitlements,requirements,flags", app_bundle]
+                  subprocess.check_call(main_sign_cmd)
                   subprocess.check_call(["codesign", "--verify", "--deep", "--strict", app_bundle])
                   print("[IPA-Patch] Code signature verified successfully!")
 
