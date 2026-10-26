@@ -41,6 +41,7 @@ export const IntroAnimation: React.FC<IntroAnimationProps> = ({
     if (hasFinishedRef.current) return;
     hasFinishedRef.current = true;
     setIsFinishing(true);
+    soundEngine.unlockAudio().catch(() => {});
     try {
       soundEngine.playResume();
     } catch {

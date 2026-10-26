@@ -93,6 +93,7 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
 }) => {
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(5);
+  const [isAdLoading, setIsAdLoading] = useState(false);
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
   const [purchasingPkgId, setPurchasingPkgId] = useState<string | null>(null);
 
@@ -100,43 +101,6 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
   const currentAdCount = dailyAdWatchCount ?? 0;
   const remainingAds = Math.max(0, maxAds - currentAdCount);
   const isAdLimitReached = remainingAds <= 0;
-
-  // Countdown timer for simulated ad (睇一次廣告加 1 個心，每日上限 5 次)
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (adWatching && adCountdown > 0) {
-      timer = setTimeout(() => {
-        setAdCountdown((c) => c - 1);
-      }, 1000);
-    } else if (adWatching && adCountdown === 0) {
-      setAdWatching(false);
-      // 睇一次廣告加 1 個心
-      let success = false;
-      if (onWatchAdReward) {
-        success = onWatchAdReward();
-      } else {
-        success = onAddHearts(1);
-      }
-
-      if (success) {
-        triggerConfetti();
-        const nextRemaining = Math.max(0, remainingAds - 1);
-        const msg =
-          language === 'en'
-            ? `Ad Reward: +1 Heart received! ❤️ (${nextRemaining}/${maxAds} ads left today)`
-            : language === 'ja'
-            ? `広告リワード：ハート+1個獲得！❤️ (本日残り ${nextRemaining}/${maxAds}回)`
-            : language === 'zh-CN'
-            ? `看广告奖励：已获取 +1 颗爱心！❤️ (今日剩余 ${nextRemaining}/${maxAds} 次)`
-            : `看廣告獎勵：已獲取 +1 顆愛心！❤️ (今日剩餘 ${nextRemaining}/${maxAds} 次)`;
-        setPurchaseSuccess(msg);
-        setTimeout(() => setPurchaseSuccess(null), 3500);
-      }
-    }
-    return () => clearTimeout(timer);
-  }, [adWatching, adCountdown, onWatchAdReward, onAddHearts, language, remainingAds, maxAds]);
-
-  if (!isOpen) return null;
 
   const triggerConfetti = () => {
     try {
@@ -150,47 +114,81 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
     }
   };
 
+  // 發放看廣告獎勵
+  const grantReward = () => {
+    let success = false;
+    if (onWatchAdReward) {
+      success = onWatchAdReward();
+    } else {
+      success = onAddHearts(1);
+    }
+
+    if (success) {
+      soundEngine.playSpecialEat();
+      triggerConfetti();
+      const nextRemaining = Math.max(0, remainingAds - 1);
+      const msg =
+        language === 'en'
+          ? `Ad Reward: +1 Heart received! ❤️ (${nextRemaining}/${maxAds} ads left today)`
+          : language === 'ja'
+          ? `広告リワード：ハート+1個獲得！❤️ (本日残り ${nextRemaining}/${maxAds}回)`
+          : language === 'zh-CN'
+          ? `看广告奖励：已获取 +1 颗爱心！❤️ (今日剩余 ${nextRemaining}/${maxAds} 次)`
+          : `看廣告獎勵：已獲取 +1 顆愛心！❤️ (今日剩餘 ${nextRemaining}/${maxAds} 次)`;
+      setPurchaseSuccess(msg);
+      setTimeout(() => setPurchaseSuccess(null), 3500);
+    }
+    return success;
+  };
+
+  // Countdown timer for simulated ad (5秒贊助商短片廣告倒數)
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (adWatching && adCountdown > 0) {
+      timer = setTimeout(() => {
+        setAdCountdown((c) => {
+          if (c > 1) {
+            soundEngine.playTurn();
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else if (adWatching && adCountdown === 0) {
+      setAdWatching(false);
+      grantReward();
+    }
+    return () => clearTimeout(timer);
+  }, [adWatching, adCountdown]);
+
+  if (!isOpen) return null;
+
   const handleWatchAd = async () => {
-    if (isAdLimitReached) {
+    if (isAdLimitReached || isAdLoading || adWatching) {
       soundEngine.playTurn();
       return;
     }
     soundEngine.playClick();
+    setIsAdLoading(true);
 
-    // 如果在原生手機環境 (Capacitor Android / iOS)
-    if (isCapacitorNative()) {
-      try {
-        const isRewarded = await admobService.showRewardedAd();
-        if (isRewarded) {
-          let success = false;
-          if (onWatchAdReward) {
-            success = onWatchAdReward();
-          } else {
-            success = onAddHearts(1);
-          }
-
-          if (success) {
-            triggerConfetti();
-            const nextRemaining = Math.max(0, remainingAds - 1);
-            const msg =
-              language === 'en'
-                ? `Ad Reward: +1 Heart received! ❤️ (${nextRemaining}/${maxAds} ads left today)`
-                : language === 'ja'
-                ? `広告リワード：ハート+1個獲得！❤️ (本日残り ${nextRemaining}/${maxAds}回)`
-                : language === 'zh-CN'
-                ? `看广告奖励：已获取 +1 颗爱心！❤️ (今日剩余 ${nextRemaining}/${maxAds} 次)`
-                : `看廣告獎勵：已獲取 +1 顆愛心！❤️ (今日剩餘 ${nextRemaining}/${maxAds} 次)`;
-            setPurchaseSuccess(msg);
-            setTimeout(() => setPurchaseSuccess(null), 3500);
-          }
+    try {
+      // 1. 若在原生手機環境 (Capacitor Android / iOS) 且原生 AdMob 插件可用，優先調用真實 AdMob
+      if (isCapacitorNative() && admobService.hasNativePlugin()) {
+        const result = await admobService.showRewardedAd();
+        if (result.success) {
+          grantReward();
+          setIsAdLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error('AdMob 播放異常:', err);
+        console.log('[HeartsModal] 原生廣告未成功播放或無廣告庫存，無縫切換至備用廣告:', result.reason);
       }
-      return;
+    } catch (err) {
+      console.warn('[HeartsModal] 調用原生 AdMob 異常，切換至備用廣告:', err);
+    } finally {
+      setIsAdLoading(false);
     }
 
-    // 瀏覽器 / Web 預覽環境下：啟用精美內建模擬廣告倒數
+    // 2. 備用與模擬方案 (100% 確保點擊必定有反應，在任何環境均能流暢彈出 5 秒短片廣告):
+    // 包含：未包含原生 AdMob 插件的 TestFlight 構建、AdMob 審核中/無填充、Web 預覽等
     setAdCountdown(5);
     setAdWatching(true);
   };
@@ -288,44 +286,70 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
         }
       }}
     >
-      {/* Simulated Ad Playing Overlay (睇一次廣告加 1 個心) */}
+      {/* Sponsor Video Ad Overlay (5秒廣告倒數，任何環境 100% 保證可彈出並成功獲得 +1 ❤️) */}
       {adWatching && (
-        <div className="absolute inset-0 z-70 bg-slate-950 flex flex-col items-center justify-between p-6 animate-fade-in text-center">
-          <div className="w-full flex items-center justify-between">
-            <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-medium">
-              {language === 'en' ? 'Sponsor Ad' : language === 'ja' ? 'スポンサー広告' : language === 'zh-CN' ? '赞助商广告' : '贊助商廣告'}
+        <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 animate-fade-in text-center select-none">
+          {/* Header */}
+          <div className="w-full max-w-md flex items-center justify-between pt-safe">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-teal-300 font-bold border border-teal-500/30 flex items-center gap-1.5 shadow-sm">
+              <Film className="w-3.5 h-3.5 text-teal-400" />
+              {language === 'en' ? 'Sponsor Video' : language === 'ja' ? 'スポンサー動画' : language === 'zh-CN' ? '赞助商广告' : '贊助商影片廣告'}
             </span>
-            <div className="text-xs font-mono font-bold text-amber-400 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-500/30">
-              {language === 'en' ? `Ad remaining ${adCountdown}s` : language === 'ja' ? `残り ${adCountdown}秒` : language === 'zh-CN' ? `广告剩余 ${adCountdown} 秒` : `廣告剩餘 ${adCountdown} 秒`}
+            <div className="text-xs font-mono font-black text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-400/40 shadow-inner">
+              {adCountdown > 0
+                ? (language === 'en' ? `Reward in ${adCountdown}s` : language === 'ja' ? `報酬まで ${adCountdown}秒` : language === 'zh-CN' ? `倒计时 ${adCountdown} 秒` : `獎勵倒數 ${adCountdown} 秒`)
+                : (language === 'en' ? 'Complete!' : '已完成！')}
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-4 my-auto">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-rose-500 to-amber-400 flex items-center justify-center shadow-2xl shadow-rose-500/30">
-              <Sparkles className="w-10 h-10 text-slate-950" />
+          {/* Central Animated Content */}
+          <div className="flex flex-col items-center gap-4 my-auto max-w-xs">
+            <div className="relative">
+              <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-rose-500 via-pink-500 to-amber-400 flex items-center justify-center shadow-2xl shadow-rose-500/40 animate-pulse">
+                <Sparkles className="w-12 h-12 text-slate-950" />
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-emerald-500 border-2 border-slate-950 flex items-center justify-center text-slate-950 font-black shadow-lg">
+                <Heart className="w-4 h-4 fill-slate-950" />
+              </div>
             </div>
+
             <div>
-              <h2 className="text-xl font-black text-white">SNAKE ENERGY REFILL</h2>
-              <p className="text-xs text-slate-400 max-w-xs mt-1">
+              <h2 className="text-xl font-black text-white tracking-wide">
+                SNAKE ENERGY REFILL
+              </h2>
+              <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
                 {language === 'en'
-                  ? 'Thank you for supporting! +1 Heart will be added after completion.'
+                  ? 'Watching sponsor message... +1 Heart will be awarded immediately!'
                   : language === 'ja'
-                  ? '動画視聴ありがとうございます！視聴後にハート+1個がプレゼントされます。'
+                  ? '動画を視聴中... 終了後にハート+1個を自動付與！'
                   : language === 'zh-CN'
-                  ? '感谢观看赞助短片！播放完成立即补充 +1 颗爱心！'
-                  : '感謝觀看贊助短片！播放完成立即補充 +1 顆愛心！'}
+                  ? '正在播放赞助短片... 播放完成后立即获得 +1 颗爱心！'
+                  : '正在播放贊助短片... 播放完成後立即獲得 +1 顆愛心！'}
               </p>
             </div>
-            <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+
+            {/* Progress bar */}
+            <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5 shadow-inner">
               <div
-                className="h-full bg-rose-500 transition-all duration-1000 ease-linear"
+                className="h-full bg-gradient-to-r from-teal-400 via-rose-500 to-amber-400 rounded-full transition-all duration-1000 ease-linear"
                 style={{ width: `${((5 - adCountdown) / 5) * 100}%` }}
               />
             </div>
+
+            <div className="text-[11px] font-mono text-slate-400">
+              {adCountdown > 0 ? `${5 - adCountdown} / 5 sec` : '100%'}
+            </div>
           </div>
 
-          <div className="text-[11px] text-slate-500">
-            {language === 'en' ? 'Reward will be granted when finished...' : language === 'ja' ? '広告終了後に自動で付与されます...' : language === 'zh-CN' ? '广告播放完毕后将自动发放奖励 (+1 ❤️)...' : '廣告播放完畢後將自動發放獎勵 (+1 ❤️)...'}
+          {/* Footer info */}
+          <div className="text-[11px] text-slate-400 pb-safe">
+            {language === 'en'
+              ? 'Free daily reward: +1 Heart ❤️'
+              : language === 'ja'
+              ? '無料デイリーリワード：ハート +1個 ❤️'
+              : language === 'zh-CN'
+              ? '每日免费奖励：+1 颗爱心 ❤️'
+              : '每日免費獎勵：+1 顆愛心 ❤️'}
           </div>
         </div>
       )}
@@ -396,26 +420,37 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
 
               <button
                 type="button"
-                disabled={isAdLimitReached}
+                disabled={isAdLimitReached || isAdLoading || adWatching}
                 onClick={handleWatchAd}
-                className={`px-3 py-2 rounded-xl font-bold text-xs transition-all shrink-0 active:scale-95 shadow-sm flex items-center gap-1 min-h-[40px] ${
+                className={`px-3 py-2 rounded-xl font-bold text-xs transition-all shrink-0 active:scale-95 shadow-sm flex items-center gap-1 min-h-[40px] touch-manipulation min-w-[65px] justify-center ${
                   isAdLimitReached
                     ? 'bg-slate-800 text-slate-500 border border-slate-700/80 cursor-not-allowed'
+                    : isAdLoading
+                    ? 'bg-teal-600 text-teal-100 cursor-wait'
                     : 'bg-teal-500 hover:bg-teal-400 text-slate-950 cursor-pointer shadow-teal-500/20'
                 }`}
               >
-                <Heart className={`w-3.5 h-3.5 ${isAdLimitReached ? 'text-slate-500' : 'fill-slate-950'}`} />
-                <span>
-                  {isAdLimitReached
-                    ? language === 'en'
-                      ? 'Limit Reached'
-                      : language === 'ja'
-                      ? '上限到達'
-                      : language === 'zh-CN'
-                      ? '今日已达上限'
-                      : '今日已達上限'
-                    : '+1'}
-                </span>
+                {isAdLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{language === 'en' ? 'Loading...' : '連線中...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Heart className={`w-3.5 h-3.5 ${isAdLimitReached ? 'text-slate-500' : 'fill-slate-950'}`} />
+                    <span>
+                      {isAdLimitReached
+                        ? language === 'en'
+                          ? 'Limit Reached'
+                          : language === 'ja'
+                          ? '上限到達'
+                          : language === 'zh-CN'
+                          ? '今日已达上限'
+                          : '今日已達上限'
+                        : '+1'}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
 

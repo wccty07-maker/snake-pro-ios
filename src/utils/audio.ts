@@ -1,9 +1,30 @@
 /**
-/**
  * Modern Mobile Game Audio Engine
  * Uses Web Audio API to create arcade-quality sound effects and procedural background music
  * with multi-part melodies and layered instrumentation without external audio files.
  */
+
+const MASTER_BGM_VOLUME = 0.35;
+const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+let isHtml5AudioUnlocked = false;
+
+const unlockHtml5Audio = () => {
+  if (isHtml5AudioUnlocked || typeof window === 'undefined') return;
+  try {
+    const audio = new Audio();
+    audio.src = SILENT_WAV;
+    audio.volume = 0.01;
+    const p = audio.play();
+    if (p !== undefined) {
+      p.then(() => {
+        isHtml5AudioUnlocked = true;
+        audio.pause();
+      }).catch(() => {});
+    }
+  } catch {
+    // ignore
+  }
+};
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
@@ -87,7 +108,7 @@ class SoundEngine {
 
       // Re-create master BGM gain node attached to the fresh context
       this.bgmGainNode = this.ctx.createGain();
-      this.bgmGainNode.gain.setValueAtTime(0.08, this.ctx.currentTime);
+      this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
       this.bgmGainNode.connect(this.ctx.destination);
 
       return this.ctx;
@@ -146,6 +167,25 @@ class SoundEngine {
     // Continuously monitor user gestures so any interaction immediately wakes audio
     const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
     const handleGesture = () => {
+      unlockHtml5Audio();
+
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended' || (this.ctx.state as any) === 'interrupted') {
+          this.ctx.resume().catch(() => {});
+        }
+        try {
+          const buffer = this.ctx.createBuffer(1, 1, 22050);
+          const source = this.ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(this.ctx.destination);
+          source.start(0);
+        } catch {
+          // ignore
+        }
+      } else {
+        this.initContext();
+      }
+
       const state = this.ctx ? (this.ctx.state as string) : 'closed';
       if (state !== 'running' || (this.bgmEnabled && this.wasBgmPlayingBeforeHidden && !this.bgmIntervalId)) {
         this.resumeAndRestoreAudio().catch(() => {});
@@ -275,7 +315,7 @@ class SoundEngine {
     if (!this.bgmGainNode || this.bgmGainNode.context !== this.ctx) {
       try {
         this.bgmGainNode = this.ctx.createGain();
-        this.bgmGainNode.gain.setValueAtTime(0.08, this.ctx.currentTime);
+        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
         this.bgmGainNode.connect(this.ctx.destination);
       } catch {
         // ignore
@@ -358,7 +398,7 @@ class SoundEngine {
     if (!this.bgmGainNode || this.bgmGainNode.context !== ctx) {
       try {
         this.bgmGainNode = ctx.createGain();
-        this.bgmGainNode.gain.setValueAtTime(0.08, ctx.currentTime);
+        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, ctx.currentTime);
         this.bgmGainNode.connect(ctx.destination);
       } catch {
         // ignore
@@ -507,7 +547,7 @@ class SoundEngine {
       if (!this.bgmGainNode || this.bgmGainNode.context !== audioCtx) {
         try {
           this.bgmGainNode = audioCtx.createGain();
-          this.bgmGainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, audioCtx.currentTime);
           this.bgmGainNode.connect(audioCtx.destination);
         } catch {
           return;
@@ -530,8 +570,8 @@ class SoundEngine {
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(melodyFreq, now);
 
-          // Natural warm marimba envelope
-          noteGain.gain.setValueAtTime(0.065, now);
+          // Natural warm marimba envelope (well-balanced volume)
+          noteGain.gain.setValueAtTime(0.18, now);
           noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
 
           osc.connect(noteGain);
@@ -549,7 +589,7 @@ class SoundEngine {
           bellOsc.type = 'sine';
           bellOsc.frequency.setValueAtTime(glockFreq, now);
 
-          bellGain.gain.setValueAtTime(0.035, now);
+          bellGain.gain.setValueAtTime(0.12, now);
           bellGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.22);
 
           bellOsc.connect(bellGain);
@@ -567,7 +607,7 @@ class SoundEngine {
           harmOsc.type = 'sine';
           harmOsc.frequency.setValueAtTime(harmonyFreq, now);
 
-          harmGain.gain.setValueAtTime(0.025, now);
+          harmGain.gain.setValueAtTime(0.10, now);
           harmGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.14);
 
           harmOsc.connect(harmGain);
@@ -586,7 +626,7 @@ class SoundEngine {
           bassOsc.frequency.setValueAtTime(bassFreq * 1.04, now);
           bassOsc.frequency.exponentialRampToValueAtTime(bassFreq, now + 0.04);
 
-          bassGain.gain.setValueAtTime(0.075, now);
+          bassGain.gain.setValueAtTime(0.20, now);
           bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
           bassOsc.connect(bassGain);
@@ -604,7 +644,7 @@ class SoundEngine {
           wbOsc.type = 'sine';
           wbOsc.frequency.setValueAtTime(1200, now);
           wbOsc.frequency.exponentialRampToValueAtTime(600, now + 0.03);
-          wbGain.gain.setValueAtTime(0.03, now);
+          wbGain.gain.setValueAtTime(0.10, now);
           wbGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
           wbOsc.connect(wbGain);
           wbGain.connect(this.bgmGainNode);
@@ -621,7 +661,7 @@ class SoundEngine {
           filter.Q.setValueAtTime(3.0, now);
 
           const noiseGain = audioCtx.createGain();
-          noiseGain.gain.setValueAtTime(0.015, now);
+          noiseGain.gain.setValueAtTime(0.06, now);
           noiseGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.04);
 
           noise.connect(filter);
@@ -668,7 +708,7 @@ class SoundEngine {
       osc.frequency.setValueAtTime(baseFreq, now);
       osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.6, now + 0.08);
 
-      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.setValueAtTime(0.35, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
       osc.connect(gain);
@@ -700,7 +740,7 @@ class SoundEngine {
 
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.setValueAtTime(0.30, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
@@ -1545,7 +1585,7 @@ class SoundEngine {
 
       osc.type = 'sine';
       osc.frequency.setValueAtTime(800, now);
-      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.setValueAtTime(0.28, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
 
       osc.connect(gain);

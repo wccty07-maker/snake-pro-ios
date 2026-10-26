@@ -539,6 +539,7 @@ export default function App() {
 
   useEffect(() => {
     const handleFirstInteraction = () => {
+      soundEngine.unlockAudio().catch(() => {});
       if (profile.bgmEnabled ?? true) {
         soundEngine.startBgm();
       }
@@ -546,10 +547,14 @@ export default function App() {
 
     window.addEventListener('click', handleFirstInteraction, { once: true });
     window.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    window.addEventListener('touchend', handleFirstInteraction, { once: true });
+    window.addEventListener('pointerdown', handleFirstInteraction, { once: true });
 
     return () => {
       window.removeEventListener('click', handleFirstInteraction);
       window.removeEventListener('touchstart', handleFirstInteraction);
+      window.removeEventListener('touchend', handleFirstInteraction);
+      window.removeEventListener('pointerdown', handleFirstInteraction);
     };
   }, [profile.bgmEnabled]);
 

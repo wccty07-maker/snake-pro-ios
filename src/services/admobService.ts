@@ -33,15 +33,30 @@ export const getNativePlatform = (): 'android' | 'ios' | 'web' => {
 };
 
 // 安全獲取 Capacitor 原生 AdMob 插件物件
-const getNativeAdMobPlugin = () => {
+export const getNativeAdMobPlugin = () => {
   if (typeof window === 'undefined') return null;
   const win = window as CapacitorWindow;
   return win.Capacitor?.Plugins?.AdMob || null;
 };
 
+export interface AdShowResult {
+  success: boolean;
+  playedNativeAd: boolean;
+  reason?: 'SUCCESS' | 'NO_PLUGIN' | 'NOT_NATIVE' | 'FAILED_TO_SHOW' | 'USER_DISMISSED' | 'TIMEOUT';
+}
+
 class AdMobManager {
   private isInitialized = false;
   private isAdLoading = false;
+
+  /**
+   * 檢查當前是否有可用的原生 AdMob 插件
+   */
+  hasNativePlugin(): boolean {
+    if (!isCapacitorNative()) return false;
+    const plugin = getNativeAdMobPlugin();
+    return !!(plugin && (typeof plugin.showRewardVideoAd === 'function' || typeof plugin.prepareRewardVideoAd === 'function'));
+  }
 
   /**
    * 初始化 AdMob SDK
@@ -50,14 +65,13 @@ class AdMobManager {
     if (this.isInitialized) return true;
 
     if (!isCapacitorNative()) {
-      console.log('[AdMobService] 當前為 Web 瀏覽器環境，使用內建模擬廣告模式');
       this.isInitialized = true;
       return true;
     }
 
     try {
       const adMobPlugin = getNativeAdMobPlugin();
-      if (adMobPlugin) {
+      if (adMobPlugin && typeof adMobPlugin.initialize === 'function') {
         await adMobPlugin.initialize({
           testingDevices: ['2077ef8a63d528687e0238f802e42094'],
           initializeForTesting: ADMOB_CONFIG.isTesting,
@@ -87,72 +101,80 @@ class AdMobManager {
 
   /**
    * 播放獎勵影片廣告
-   * @returns Promise<boolean> - 若完整觀看並獲得獎勵返回 true；若中途退出或失敗返回 false
+   * 若原生環境中 AdMob 插件不可用、無廣告庫存填充或播放失敗，
+   * 自動返回 playedNativeAd: false，讓調用層無縫切換到內建模擬贊助商廣告。
    */
-  async showRewardedAd(): Promise<boolean> {
-    // 1. 如果在 Web / 瀏覽器環境，返回 false 讓 UI 層執行內建精美模擬廣告倒數
+  async showRewardedAd(): Promise<AdShowResult> {
     if (!isCapacitorNative()) {
-      return false; // 表示非原生 AdMob，交由前端 UI 播放 5 秒倒數
+      return { success: false, playedNativeAd: false, reason: 'NOT_NATIVE' };
     }
 
-    // 2. 原生平台呼叫真實 AdMob SDK
+    const adMobPlugin = getNativeAdMobPlugin();
+    if (!adMobPlugin || typeof adMobPlugin.prepareRewardVideoAd !== 'function') {
+      return { success: false, playedNativeAd: false, reason: 'NO_PLUGIN' };
+    }
+
     if (this.isAdLoading) {
       console.warn('[AdMobService] 廣告載入中，請勿重複點擊');
-      return false;
+      return { success: false, playedNativeAd: false, reason: 'TIMEOUT' };
     }
 
     this.isAdLoading = true;
 
     try {
-      const adMobPlugin = getNativeAdMobPlugin();
-      if (!adMobPlugin) {
-        this.isAdLoading = false;
-        return false;
-      }
-
       await this.initialize();
       const adId = this.getRewardedAdUnitId();
 
-      // 準備廣告
-      await adMobPlugin.prepareRewardVideoAd({
-        adId: adId,
-      });
+      // 準備廣告 (最長等待 5 秒，避免長時間無響應)
+      const preparePromise = adMobPlugin.prepareRewardVideoAd({ adId });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AdMob prepare timeout')), 5000)
+      );
+      await Promise.race([preparePromise, timeoutPromise]);
 
-      return new Promise<boolean>(async (resolve) => {
+      return new Promise<AdShowResult>(async (resolve) => {
         let isEarned = false;
 
         // 監聽是否達成獲得獎勵條件
-        const rewardListener = await adMobPlugin.addListener('onRewardedVideoAdReward', () => {
+        const rewardListener = await adMobPlugin.addListener?.('onRewardedVideoAdReward', () => {
           console.log('[AdMobService] 恭喜！用戶已完成觀看，領取愛心獎勵');
           isEarned = true;
         });
 
         // 監聽廣告關閉事件
-        const dismissListener = await adMobPlugin.addListener('onRewardedVideoAdDismissed', () => {
+        const dismissListener = await adMobPlugin.addListener?.('onRewardedVideoAdDismissed', () => {
           console.log('[AdMobService] 廣告已關閉，發放狀態:', isEarned);
-          if (rewardListener && rewardListener.remove) rewardListener.remove();
-          if (dismissListener && dismissListener.remove) dismissListener.remove();
+          rewardListener?.remove?.();
+          dismissListener?.remove?.();
           this.isAdLoading = false;
-          resolve(isEarned);
+          resolve({
+            success: isEarned,
+            playedNativeAd: true,
+            reason: isEarned ? 'SUCCESS' : 'USER_DISMISSED',
+          });
         });
 
         // 監聽廣告播放失敗事件
-        const failListener = await adMobPlugin.addListener('onRewardedVideoAdFailedToShow', (err: any) => {
-          console.error('[AdMobService] 廣告播放失敗:', err);
-          if (rewardListener && rewardListener.remove) rewardListener.remove();
-          if (dismissListener && dismissListener.remove) dismissListener.remove();
-          if (failListener && failListener.remove) failListener.remove();
+        const failListener = await adMobPlugin.addListener?.('onRewardedVideoAdFailedToShow', (err: any) => {
+          console.warn('[AdMobService] 原生廣告播放失敗:', err);
+          rewardListener?.remove?.();
+          dismissListener?.remove?.();
+          failListener?.remove?.();
           this.isAdLoading = false;
-          resolve(false);
+          resolve({
+            success: false,
+            playedNativeAd: false,
+            reason: 'FAILED_TO_SHOW',
+          });
         });
 
         // 啟動播放廣告
         await adMobPlugin.showRewardVideoAd();
       });
     } catch (error) {
-      console.error('[AdMobService] 呼叫 AdMob 原生播放出錯:', error);
+      console.warn('[AdMobService] 原生 AdMob 播放異常，平滑切換至備用模擬廣告:', error);
       this.isAdLoading = false;
-      return false;
+      return { success: false, playedNativeAd: false, reason: 'FAILED_TO_SHOW' };
     }
   }
 }
