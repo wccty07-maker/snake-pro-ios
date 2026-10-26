@@ -114,34 +114,46 @@ jobs:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "--quiet"])
               from PIL import Image
 
-          target_dir = "ios/App/App/Assets.xcassets/AppIcon.appiconset"
-          if not os.path.exists(target_dir):
-              target_dir = "ios"
-
+          target_dirs = [
+              "ios/App/App/Assets.xcassets",
+              "ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          ]
           count = 0
-          for root, _, files in os.walk(target_dir):
-              for f in files:
-                  if f.lower().endswith(".png"):
-                      p = os.path.join(root, f)
-                      try:
-                          with Image.open(p) as img:
-                              print(f"[Icon-Fix] Inspecting {p}: mode={img.mode}, size={img.size}")
-                              bg = Image.new("RGB", img.size, (15, 23, 42))
-                              if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
-                                  rgba = img.convert("RGBA")
-                                  bg.paste(rgba, (0, 0), rgba)
+          for target_dir in target_dirs:
+              if not os.path.exists(target_dir):
+                  continue
+              for root, _, files in os.walk(target_dir):
+                  for f in files:
+                      if f.lower().endswith(".png"):
+                          p = os.path.join(root, f)
+                          try:
+                              with Image.open(p) as img:
+                                  bg = Image.new("RGB", img.size, (15, 23, 42))
+                                  if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                                      rgba = img.convert("RGBA")
+                                      bg.paste(rgba, (0, 0), rgba)
+                                  else:
+                                      bg.paste(img.convert("RGB"), (0, 0))
                                   bg.save(p, "PNG", optimize=True)
-                                  print(f"[Icon-Fix] Stripped alpha from {p}")
-                              else:
-                                  bg.paste(img.convert("RGB"), (0, 0))
-                                  bg.save(p, "PNG", optimize=True)
-                                  print(f"[Icon-Fix] Re-saved {p} as pure 24-bit RGB")
-                              count += 1
-                      except Exception as e:
-                          print(f"[Icon-Fix] Error on {p}: {e}")
-          print(f"[Icon-Fix] Completed. {count} icon(s) made strictly opaque RGB.")
+                                  count += 1
+                                  print(f"[Icon-Fix] Stripped alpha via Pillow: {p} ({img.size})")
+                          except Exception as e:
+                              print(f"[Icon-Fix] Error processing {p}: {e}")
+          print(f"[Icon-Fix] Total processed by Pillow: {count}")
           EOF
           python3 scripts/strip-icon-alpha.py || true
+
+          # Secondary macOS native sips guarantee (converting to BMP and back removes alpha completely)
+          if command -v sips >/dev/null 2>&1; then
+            find ios/App/App/Assets.xcassets -name "*.png" | while read -r img; do
+              sips -s format bmp "$img" --out "${img}.bmp" >/dev/null 2>&1 || true
+              if [ -f "${img}.bmp" ]; then
+                sips -s format png "${img}.bmp" --out "$img" >/dev/null 2>&1 || true
+                rm -f "${img}.bmp"
+              fi
+              echo "sips status for $img: $(sips -g hasAlpha "$img" 2>/dev/null | tr -d '\n')"
+            done
+          fi
 
       - name: Patch Xcode Project Signing & Development Team
         run: |
@@ -224,6 +236,21 @@ jobs:
                   plistlib.dump(pdata, fp)
 
               print(f"[IPA-Patch] Successfully updated to DTSDKName=iphoneos26.0, DTXcode=2600, DTPlatformVersion=26.0")
+
+              # Strip alpha from any PNG inside app bundle as double safeguard
+              if sys.platform == "darwin":
+                  for root, _, files in os.walk(app_bundle):
+                      for f in files:
+                          if f.lower().endswith(".png"):
+                              img_path = os.path.join(root, f)
+                              try:
+                                  bmp_tmp = img_path + ".bmp"
+                                  subprocess.call(["sips", "-s", "format", "bmp", img_path, "--out", bmp_tmp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                  if os.path.exists(bmp_tmp):
+                                      subprocess.call(["sips", "-s", "format", "png", bmp_tmp, "--out", img_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                      os.remove(bmp_tmp)
+                              except Exception:
+                                  pass
 
               # Re-sign with codesign
               if sys.platform == "darwin":
@@ -419,10 +446,14 @@ jobs:
               build_app(build_opts)
 
               # 6.5. Patch IPA for Apple App Store Connect iOS 26+ SDK & Xcode 26+ validation
-              patch_script = File.exist?("../../scripts/patch-ipa.py") ? "../../scripts/patch-ipa.py" : (File.exist?("../../../scripts/patch-ipa.py") ? "../../../scripts/patch-ipa.py" : Dir["**/patch-ipa.py"].first)
-              if patch_script && File.exist?("../../build/SnakePro.ipa")
+              root_dir = File.expand_path("../..", Dir.pwd)
+              patch_script = File.exist?("#{root_dir}/scripts/patch-ipa.py") ? "#{root_dir}/scripts/patch-ipa.py" : (File.exist?("../../scripts/patch-ipa.py") ? "../../scripts/patch-ipa.py" : Dir["**/patch-ipa.py"].first)
+              ipa_file = File.exist?("#{root_dir}/build/SnakePro.ipa") ? "#{root_dir}/build/SnakePro.ipa" : "../../build/SnakePro.ipa"
+              if patch_script && File.exist?(ipa_file)
                 UI.message("Patching SnakePro.ipa with iOS 26 SDK & Xcode 26 and re-signing...")
-                sh("python3 '#{patch_script}' '../../build/SnakePro.ipa' '#{keychain_path}'")
+                sh("python3 '#{patch_script}' '#{ipa_file}' '#{keychain_path}'")
+              else
+                UI.important("Notice: patch_script=#{patch_script} exist=#{File.exist?(patch_script.to_s)}, ipa=#{ipa_file} exist=#{File.exist?(ipa_file.to_s)}")
               end
 
               # 7. Upload directly to TestFlight
