@@ -40,6 +40,10 @@ class SoundEngine {
   private isResumingAudio: boolean = false;
   private lastResumeAttempt: number = 0;
 
+  // iOS WKWebView Keep-Alive nodes to prevent CoreAudio hardware sleep
+  private keepAliveSource: AudioBufferSourceNode | null = null;
+  private keepAliveGain: GainNode | null = null;
+
   private isUnlockedState: boolean = false;
   private unlockListenersAttached: boolean = false;
   private unlockCallbacks: Array<() => void> = [];
@@ -67,7 +71,59 @@ class SoundEngine {
     }
   }
 
+  /**
+   * iOS CoreAudio Keep-Alive 機制：
+   * 在 iOS 原生 WKWebView / Capacitor 中，當沒有聲音播放超過數秒時，
+   * iOS 會極為激進地將底層音訊硬體單元關閉省電，導致下一次音效「有時有聲、有時無聲或延遲」。
+   * 透過微弱無聲的循環音訊流 (Gain = 0.00001)，告知 iOS 音訊管線保持活動狀態，
+   * 100% 根除「有時有聲、有時無聲」現象！
+   */
+  private startKeepAlive(ctx: AudioContext) {
+    if (typeof window === 'undefined') return;
+    this.stopKeepAlive();
+
+    try {
+      const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.00001, ctx.currentTime);
+
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start(0);
+
+      this.keepAliveSource = source;
+      this.keepAliveGain = gain;
+    } catch {
+      // ignore
+    }
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveSource) {
+      try {
+        this.keepAliveSource.stop();
+        this.keepAliveSource.disconnect();
+      } catch {
+        // ignore
+      }
+      this.keepAliveSource = null;
+    }
+    if (this.keepAliveGain) {
+      try {
+        this.keepAliveGain.disconnect();
+      } catch {
+        // ignore
+      }
+      this.keepAliveGain = null;
+    }
+  }
+
   private cleanupContext() {
+    this.stopKeepAlive();
     if (this.bgmIntervalId !== null) {
       clearInterval(this.bgmIntervalId);
       this.bgmIntervalId = null;
@@ -111,6 +167,9 @@ class SoundEngine {
       this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
       this.bgmGainNode.connect(this.ctx.destination);
 
+      // 啟動 Keep-Alive 常駐保活
+      this.startKeepAlive(this.ctx);
+
       return this.ctx;
     } catch (err) {
       console.warn('[SoundEngine] Failed to recreate AudioContext:', err);
@@ -124,6 +183,7 @@ class SoundEngine {
       const state = ctx.state as string;
       if (state === 'running') {
         this.isUnlockedState = true;
+        this.startKeepAlive(ctx);
         const cbs = [...this.unlockCallbacks];
         this.unlockCallbacks = [];
         cbs.forEach((cb) => {
@@ -133,6 +193,14 @@ class SoundEngine {
             // ignore
           }
         });
+      } else if (state === 'interrupted') {
+        // iOS WebKit 特殊 bug: 一旦進入 interrupted 狀態，呼叫 resume 通常無效，需自動重建 Context
+        console.log('[SoundEngine] iOS AudioContext interrupted, scheduling fresh recovery');
+        setTimeout(() => {
+          if ((this.ctx?.state as string) === 'interrupted') {
+            this.recreateContext();
+          }
+        }, 300);
       }
     };
   }
@@ -302,13 +370,18 @@ class SoundEngine {
   private initContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
 
-    if (!this.ctx || this.ctx.state === 'closed') {
+    if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
       return this.recreateContext();
     }
 
     const state = this.ctx.state as string;
-    if (state === 'suspended' || state === 'interrupted') {
+    if (state === 'suspended') {
       this.ctx.resume().catch(() => {});
+    }
+
+    // 確保 KeepAlive 保持運行
+    if (!this.keepAliveSource) {
+      this.startKeepAlive(this.ctx);
     }
 
     // Ensure BGM gain node is bound to current context

@@ -5,7 +5,6 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-
 jobs:
   build-and-deploy:
     name: Build Signed IPA and Upload to TestFlight
@@ -27,7 +26,7 @@ jobs:
       - name: Install Node Dependencies
         run: |
           npm install --legacy-peer-deps
-          # Vite / Tailwind v4 / LightningCSS / Oxide / Rolldown require macOS arm64 native binaries on GitHub Actions macos-14 runner
+          # Vite / Tailwind v4 / LightningCSS / Oxide / Rolldown require macOS arm64 native binaries
           OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
           LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
           ROLLDOWN_VER=$(node -p "require('./node_modules/rolldown/package.json').version" 2>/dev/null || echo "1.2.9")
@@ -155,12 +154,6 @@ jobs:
       - name: Patch Xcode Project Signing & Development Team
         run: |
           python3 scripts/patch-xcode-signing.py ios/App/App.xcodeproj/project.pbxproj "${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}" "elemall.snakegame.1 AppStore 1793016646"
-          # Auto-increment build number using GitHub Actions run number so App Store Connect never rejects duplicate builds
-          RUN_NUM="${{ github.run_number }}"
-          if [ -n "$RUN_NUM" ] && [ "$RUN_NUM" -gt 1 ]; then
-            sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $RUN_NUM;/g" ios/App/App.xcodeproj/project.pbxproj 2>/dev/null || sed -i "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $RUN_NUM;/g" ios/App/App.xcodeproj/project.pbxproj
-            echo "Auto-set CURRENT_PROJECT_VERSION to $RUN_NUM"
-          fi
 
       - name: Set up Ruby & Fastlane
         uses: ruby/setup-ruby@v1
@@ -241,7 +234,6 @@ jobs:
                               pd["DTXcode"] = "2600"
                               pd["DTXcodeBuild"] = "26A100"
                               pd["DTSDKBuild"] = "26A100"
-                              pd["ITSAppUsesNonExemptEncryption"] = False
                               if "BuildMachineOSBuild" in pd:
                                   pd["BuildMachineOSBuild"] = "26A100"
                               with open(p_path, "wb") as fp:
