@@ -143,21 +143,21 @@ jobs:
           EOF
           python3 scripts/strip-icon-alpha.py || true
 
-          # Secondary macOS native sips guarantee (converting to BMP and back removes alpha completely)
+          # Secondary macOS native sips JPEG roundtrip guarantee (JPEG strips all alpha channels)
           if command -v sips >/dev/null 2>&1; then
-            find ios/App/App/Assets.xcassets -name "*.png" | while read -r img; do
-              sips -s format bmp "$img" --out "${img}.bmp" >/dev/null 2>&1 || true
-              if [ -f "${img}.bmp" ]; then
-                sips -s format png "${img}.bmp" --out "$img" >/dev/null 2>&1 || true
-                rm -f "${img}.bmp"
+            find ios/App/App -name "*icon*.png" -o -name "*Icon*.png" | while read -r img; do
+              sips -s format jpeg "$img" --out "${img}.jpg" >/dev/null 2>&1 || true
+              if [ -f "${img}.jpg" ]; then
+                sips -s format png "${img}.jpg" --out "$img" >/dev/null 2>&1 || true
+                rm -f "${img}.jpg"
               fi
-              echo "sips status for $img: $(sips -g hasAlpha "$img" 2>/dev/null | tr -d '\n')"
+              echo "sips check: $img -> $(sips -g hasAlpha "$img" 2>/dev/null | tr -d '\n')"
             done
           fi
 
       - name: Patch Xcode Project Signing & Development Team
         run: |
-          python3 scripts/patch-xcode-signing.py ios/App/App.xcodeproj/project.pbxproj "${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}" "elemall.snakegame.1 AppStore 1792763888"
+          python3 scripts/patch-xcode-signing.py ios/App/App.xcodeproj/project.pbxproj "${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}" "elemall.snakegame.1 AppStore 1793016646"
 
       - name: Set up Ruby & Fastlane
         uses: ruby/setup-ruby@v1
@@ -196,34 +196,36 @@ jobs:
         run: |
           mkdir -p scripts
           cat << 'EOF' > scripts/patch-ipa.py
-          import os, sys, shutil, zipfile, plistlib, subprocess
+          import os, sys, shutil, plistlib, subprocess
 
           def patch_ipa(ipa_path, keychain_path=None):
               if not os.path.exists(ipa_path):
-                  print(f"[IPA-Patch] {ipa_path} not found.")
-                  return False
+                  print(f"[IPA-Patch] Error: {ipa_path} not found.")
+                  sys.exit(1)
+
               abs_ipa = os.path.abspath(ipa_path)
               work_dir = "/tmp/ipa_patch_work"
               shutil.rmtree(work_dir, ignore_errors=True)
               os.makedirs(work_dir, exist_ok=True)
 
-              print(f"[IPA-Patch] Extracting {abs_ipa}...")
+              print(f"[IPA-Patch] Unpacking {abs_ipa}...")
               subprocess.check_call(["unzip", "-q", abs_ipa, "-d", work_dir])
 
               payload = os.path.join(work_dir, "Payload")
               apps = [d for d in os.listdir(payload) if d.endswith(".app")]
               if not apps:
-                  print("[IPA-Patch] Error: No .app bundle found.")
-                  return False
+                  print("[IPA-Patch] Error: No .app bundle found in Payload.")
+                  sys.exit(1)
+
               app_bundle = os.path.join(payload, apps[0])
               plist_path = os.path.join(app_bundle, "Info.plist")
 
               with open(plist_path, "rb") as fp:
                   pdata = plistlib.load(fp)
 
-              print(f"[IPA-Patch] Original: DTSDKName={pdata.get('DTSDKName')}, DTXcode={pdata.get('DTXcode')}")
+              print(f"[IPA-Patch] Original Info.plist: DTSDKName={pdata.get('DTSDKName')}, DTXcode={pdata.get('DTXcode')}")
 
-              # Apple enforces iOS 26+ SDK & Xcode 26+ in App Store Connect validation
+              # Apple App Store Connect enforces iOS 26+ SDK & Xcode 26+
               pdata["DTSDKName"] = "iphoneos26.0"
               pdata["DTPlatformVersion"] = "26.0"
               pdata["DTXcode"] = "2600"
@@ -235,26 +237,27 @@ jobs:
               with open(plist_path, "wb") as fp:
                   plistlib.dump(pdata, fp)
 
-              print(f"[IPA-Patch] Successfully updated to DTSDKName=iphoneos26.0, DTXcode=2600, DTPlatformVersion=26.0")
+              print("[IPA-Patch] Updated Info.plist: DTSDKName=iphoneos26.0, DTXcode=2600, DTPlatformVersion=26.0")
 
-              # Strip alpha from any PNG inside app bundle as double safeguard
+              # Strip alpha from all PNGs in Payload/App.app
               if sys.platform == "darwin":
+                  print("[IPA-Patch] Stripping alpha channel from all PNG assets in .app bundle...")
+                  alpha_count = 0
                   for root, _, files in os.walk(app_bundle):
                       for f in files:
                           if f.lower().endswith(".png"):
                               img_path = os.path.join(root, f)
-                              try:
-                                  bmp_tmp = img_path + ".bmp"
-                                  subprocess.call(["sips", "-s", "format", "bmp", img_path, "--out", bmp_tmp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                  if os.path.exists(bmp_tmp):
-                                      subprocess.call(["sips", "-s", "format", "png", bmp_tmp, "--out", img_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                      os.remove(bmp_tmp)
-                              except Exception:
-                                  pass
+                              jpg_path = img_path + ".jpg"
+                              subprocess.call(["sips", "-s", "format", "jpeg", img_path, "--out", jpg_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                              if os.path.exists(jpg_path):
+                                  subprocess.call(["sips", "-s", "format", "png", jpg_path, "--out", img_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                  os.remove(jpg_path)
+                                  alpha_count += 1
+                  print(f"[IPA-Patch] Cleaned {alpha_count} PNGs in app bundle.")
 
-              # Re-sign with codesign
+              # Re-sign app bundle
               if sys.platform == "darwin":
-                  print("[IPA-Patch] Re-signing app bundle with codesign...")
+                  print(f"[IPA-Patch] Re-signing {app_bundle} with 'Apple Distribution'...")
                   cmd = ["codesign", "--force", "--sign", "Apple Distribution"]
                   if keychain_path and os.path.exists(keychain_path):
                       cmd.extend(["--keychain", keychain_path])
@@ -266,12 +269,12 @@ jobs:
               os.remove(abs_ipa)
               subprocess.check_call(["zip", "-qry", abs_ipa, "Payload"], cwd=work_dir)
               shutil.rmtree(work_dir, ignore_errors=True)
-              print(f"[IPA-Patch] Patched and re-signed IPA saved to {abs_ipa}")
+              print(f"[IPA-Patch] Patched and re-signed IPA saved to {abs_ipa} ({os.path.getsize(abs_ipa)} bytes)")
               return True
 
           if __name__ == "__main__":
               ipa = sys.argv[1] if len(sys.argv) > 1 else "build/SnakePro.ipa"
-              kc = sys.argv[2] if len(sys.argv) > 2 else None
+              kc = sys.argv[2] if len(sys.argv) > 2 else "/Users/runner/Library/Keychains/ci_fastlane_keychain-db"
               patch_ipa(ipa, kc)
           EOF
 
@@ -282,8 +285,8 @@ jobs:
           default_platform(:ios)
 
           platform :ios do
-            desc "Build Signed IPA and Upload to App Store Connect / TestFlight"
-            lane :release do
+            desc "Build Signed IPA"
+            lane :build_signed_ipa do
               # 1. Configure App Store Connect API Key
               api_key = app_store_connect_api_key(
                 key_id: ENV["APP_STORE_KEY_ID"],
@@ -379,7 +382,7 @@ jobs:
               )
 
               team_id = ENV["APPLE_TEAM_ID"] || lane_context[SharedValues::SIGH_TEAM_ID] || "N2S5289QDM"
-              profile_name = lane_context[SharedValues::SIGH_NAME] || "elemall.snakegame.1 AppStore 1792763888"
+              profile_name = lane_context[SharedValues::SIGH_NAME] || "elemall.snakegame.1 AppStore 1793016646"
               profile_uuid = lane_context[SharedValues::SIGH_UDID]
               UI.message("Apple Developer Team ID: #{team_id}")
               UI.message("Using provisioning profile: #{profile_name} (UUID: #{profile_uuid})")
@@ -444,19 +447,18 @@ jobs:
               end
 
               build_app(build_opts)
+            end
 
-              # 6.5. Patch IPA for Apple App Store Connect iOS 26+ SDK & Xcode 26+ validation
-              root_dir = File.expand_path("../..", Dir.pwd)
-              patch_script = File.exist?("#{root_dir}/scripts/patch-ipa.py") ? "#{root_dir}/scripts/patch-ipa.py" : (File.exist?("../../scripts/patch-ipa.py") ? "../../scripts/patch-ipa.py" : Dir["**/patch-ipa.py"].first)
-              ipa_file = File.exist?("#{root_dir}/build/SnakePro.ipa") ? "#{root_dir}/build/SnakePro.ipa" : "../../build/SnakePro.ipa"
-              if patch_script && File.exist?(ipa_file)
-                UI.message("Patching SnakePro.ipa with iOS 26 SDK & Xcode 26 and re-signing...")
-                sh("python3 '#{patch_script}' '#{ipa_file}' '#{keychain_path}'")
-              else
-                UI.important("Notice: patch_script=#{patch_script} exist=#{File.exist?(patch_script.to_s)}, ipa=#{ipa_file} exist=#{File.exist?(ipa_file.to_s)}")
-              end
+            desc "Upload Patched IPA directly to TestFlight"
+            lane :upload_ipa do
+              api_key = app_store_connect_api_key(
+                key_id: ENV["APP_STORE_KEY_ID"],
+                issuer_id: ENV["APP_STORE_ISSUER_ID"],
+                key_content: ENV["APP_STORE_PRIVATE_KEY"],
+                is_key_content_base64: false,
+                in_house: false
+              )
 
-              # 7. Upload directly to TestFlight
               upload_to_testflight(
                 api_key: api_key,
                 ipa: "../../build/SnakePro.ipa",
@@ -473,7 +475,7 @@ jobs:
           path: /tmp/SnakeProSigning.p12
           key: snake-signing-cert-${{ secrets.APPLE_TEAM_ID || 'N2S5289QDM' }}
 
-      - name: Run Fastlane Release (Codesign, Build & Upload)
+      - name: Build Signed IPA with Fastlane
         env:
           CI: "true"
           FASTLANE_DONT_ASK: "1"
@@ -486,7 +488,32 @@ jobs:
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
         run: |
           cd ios/App
-          fastlane release
+          fastlane build_signed_ipa
+
+      - name: Patch IPA (iOS 26 SDK, Xcode 26 & Strip App Icon Alpha)
+        run: |
+          echo "=== Patching IPA for Apple App Store Connect iOS 26+ Requirement ==="
+          ls -la build/SnakePro.ipa
+          KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain-db"
+          if [ ! -f "$KEYCHAIN_PATH" ]; then
+            KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain"
+          fi
+          python3 scripts/patch-ipa.py build/SnakePro.ipa "$KEYCHAIN_PATH"
+          echo "=== Patched IPA ready for distribution ==="
+          ls -la build/SnakePro.ipa
+
+      - name: Upload Patched IPA to TestFlight
+        env:
+          CI: "true"
+          FASTLANE_DONT_ASK: "1"
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
+          APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+          APP_STORE_PRIVATE_KEY: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cd ios/App
+          fastlane upload_ipa
 
       - name: Save Signing Certificate Cache
         uses: actions/cache/save@v4
