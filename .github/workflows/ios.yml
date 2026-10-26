@@ -8,7 +8,7 @@ on:
 jobs:
   build-and-deploy:
     name: Build Signed IPA and Upload to TestFlight
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
 
     steps:
@@ -26,7 +26,7 @@ jobs:
       - name: Install Node Dependencies
         run: |
           npm install --legacy-peer-deps
-          # Vite / Tailwind v4 / LightningCSS / Oxide / Rolldown require macOS arm64 native binaries on GitHub Actions macos-14 runner
+          # Vite / Tailwind v4 / LightningCSS / Oxide / Rolldown require macOS arm64 native binaries
           OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
           LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
           ROLLDOWN_VER=$(node -p "require('./node_modules/rolldown/package.json').version" 2>/dev/null || echo "1.2.9")
