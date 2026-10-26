@@ -8,7 +8,7 @@ on:
 jobs:
   build-and-deploy:
     name: Build Signed IPA and Upload to TestFlight
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 60
 
     steps:
