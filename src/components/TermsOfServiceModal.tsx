@@ -142,12 +142,11 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({
               rel="noopener noreferrer"
               onClick={() => {
                 soundEngine.playClick();
+                soundEngine.prepareForExternalNavigation();
                 const handleReturn = () => {
                   window.removeEventListener('focus', handleReturn);
                   document.removeEventListener('visibilitychange', handleReturn);
-                  soundEngine.resumeAndRestoreAudio();
-                  setTimeout(() => soundEngine.resumeAndRestoreAudio(), 200);
-                  setTimeout(() => soundEngine.resumeAndRestoreAudio(), 600);
+                  soundEngine.restoreFromExternalNavigation();
                 };
                 window.addEventListener('focus', handleReturn, { once: true });
                 document.addEventListener('visibilitychange', handleReturn, { once: true });

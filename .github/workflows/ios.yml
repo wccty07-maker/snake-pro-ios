@@ -159,10 +159,10 @@ jobs:
         run: |
           # Calculate incrementing build number: previous TestFlight upload was 3. Apple requires CFBundleVersion > 3.
           RUN_NUM="${{ github.run_number }}"
-          OFFSET=3
+          OFFSET=10
           CALCULATED_BUILD=$(( RUN_NUM + OFFSET ))
-          if [ "$CALCULATED_BUILD" -lt 4 ]; then
-            CALCULATED_BUILD=4
+          if [ "$CALCULATED_BUILD" -lt 10 ]; then
+            CALCULATED_BUILD=10
           fi
           echo "Calculated Build Number: $CALCULATED_BUILD"
           echo "BUILD_NUMBER=$CALCULATED_BUILD" >> $GITHUB_ENV

@@ -319,6 +319,61 @@ class SoundEngine {
 
 
 
+  private autoCleanup(...nodes: (AudioNode | null | undefined)[]) {
+    const primary = nodes[0];
+    if (primary && 'onended' in primary) {
+      (primary as AudioScheduledSourceNode).onended = () => {
+        for (let i = 0; i < nodes.length; i++) {
+          try {
+            nodes[i]?.disconnect();
+          } catch {
+            // ignore
+          }
+        }
+      };
+      return;
+    }
+    setTimeout(() => {
+      for (let i = 0; i < nodes.length; i++) {
+        try {
+          nodes[i]?.disconnect();
+        } catch {
+          // ignore
+        }
+      }
+    }, 600);
+  }
+
+  public prepareForExternalNavigation() {
+    this.isHidden = true;
+    if (this.bgmIntervalId !== null) {
+      clearInterval(this.bgmIntervalId);
+      this.bgmIntervalId = null;
+    }
+    if (this.ctx && this.ctx.state === 'running') {
+      try {
+        this.ctx.suspend().catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  public async restoreFromExternalNavigation(): Promise<boolean> {
+    this.isHidden = false;
+    const res = await this.resumeAndRestoreAudio();
+    setTimeout(() => {
+      if (!this.ctx || this.ctx.state !== 'running') {
+        this.recreateContext();
+        if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || this.isBgmPlaying)) {
+          this.isBgmPlaying = false;
+          this.startBgm();
+        }
+      }
+    }, 250);
+    return res;
+  }
+
   public async unlockAudio(): Promise<boolean> {
     return this.resumeAndRestoreAudio();
   }
@@ -601,6 +656,7 @@ class SoundEngine {
 
           osc.connect(noteGain);
           noteGain.connect(this.bgmGainNode);
+          this.autoCleanup(osc, noteGain);
 
           osc.start(now);
           osc.stop(now + 0.18);
@@ -619,6 +675,7 @@ class SoundEngine {
 
           bellOsc.connect(bellGain);
           bellGain.connect(this.bgmGainNode);
+          this.autoCleanup(bellOsc, bellGain);
 
           bellOsc.start(now);
           bellOsc.stop(now + 0.23);
@@ -637,6 +694,7 @@ class SoundEngine {
 
           harmOsc.connect(harmGain);
           harmGain.connect(this.bgmGainNode);
+          this.autoCleanup(harmOsc, harmGain);
 
           harmOsc.start(now);
           harmOsc.stop(now + 0.15);
@@ -656,6 +714,7 @@ class SoundEngine {
 
           bassOsc.connect(bassGain);
           bassGain.connect(this.bgmGainNode);
+          this.autoCleanup(bassOsc, bassGain);
 
           bassOsc.start(now);
           bassOsc.stop(now + 0.23);
@@ -692,6 +751,7 @@ class SoundEngine {
           noise.connect(filter);
           filter.connect(noiseGain);
           noiseGain.connect(this.bgmGainNode);
+          this.autoCleanup(noise, filter, noiseGain);
 
           noise.start(now);
           noise.stop(now + 0.045);
@@ -738,6 +798,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.12);
@@ -770,6 +831,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.18);
@@ -801,6 +863,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now);
         osc.stop(now + 0.15);
@@ -832,6 +895,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now);
         osc.stop(now + 0.14);
@@ -864,6 +928,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now);
         osc.stop(now + 0.22);
@@ -896,6 +961,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(t);
         osc.stop(t + 0.055);
@@ -927,6 +993,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.16);
@@ -957,6 +1024,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.15);
@@ -987,6 +1055,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.25);
@@ -1017,6 +1086,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.18);
@@ -1054,6 +1124,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.25);
@@ -1119,6 +1190,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.4);
@@ -1151,6 +1223,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now + i * 0.08);
         osc.stop(now + i * 0.08 + 0.4);
@@ -1184,6 +1257,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now + i * 0.1);
         osc.stop(now + i * 0.1 + 0.35);
@@ -1214,6 +1288,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.045);
@@ -1243,6 +1318,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.35);
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
         osc.start(now + idx * 0.04);
         osc.stop(now + idx * 0.04 + 0.36);
       });
@@ -1275,6 +1351,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
         osc.start(now);
         osc.stop(now + 0.42);
       });
@@ -1303,6 +1380,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.5);
 
@@ -1341,6 +1419,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.04);
     } catch {
@@ -1366,6 +1445,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
         osc.start(now + i * 0.06);
         osc.stop(now + i * 0.06 + 0.26);
       });
@@ -1392,6 +1472,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.6);
     } catch {
@@ -1417,6 +1498,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.08);
     } catch {
@@ -1443,6 +1525,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.4);
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.42);
       });
@@ -1470,6 +1553,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.26);
     } catch {
@@ -1495,6 +1579,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.3);
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
         osc.start(now + i * 0.04);
         osc.stop(now + i * 0.04 + 0.32);
       });
@@ -1520,6 +1605,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.2);
     } catch {
@@ -1549,6 +1635,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.3);
@@ -1586,6 +1673,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now + idx * 0.08);
         osc.stop(now + idx * 0.08 + 0.2);
@@ -1615,6 +1703,7 @@ class SoundEngine {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
       osc.start(now);
       osc.stop(now + 0.03);
@@ -1646,6 +1735,7 @@ class SoundEngine {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+      this.autoCleanup(osc, gain);
 
         osc.start(now + idx * 0.1);
         osc.stop(now + idx * 0.1 + 0.18);
