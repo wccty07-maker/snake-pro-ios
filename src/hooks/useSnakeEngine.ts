@@ -2274,18 +2274,21 @@ export function useSnakeEngine({
     if (newDir !== currentOrLastQueued && newDir !== opposites[currentOrLastQueued]) {
       if (nextDirQueue.current.length < 2) {
         nextDirQueue.current.push(newDir);
-        soundEngine.playTurn();
+      } else {
+        // Player quickly changed their mind: update the latest queued turn so latest input is never lost!
+        nextDirQueue.current[nextDirQueue.current.length - 1] = newDir;
+      }
+      soundEngine.playTurn();
 
-        // 6. Turn limit mechanic: Decrement turnsLeft
-        const activeLevel = currentLevelRef.current;
-        if (activeLevel?.maxTurns || activeLevel?.gimmick === 'TURN_LIMIT') {
-          turnsLeftRef.current = Math.max(0, turnsLeftRef.current - 1);
-          setTurnsLeft(turnsLeftRef.current);
-          if (turnsLeftRef.current <= 0) {
-            // Check if level mission is not already met
-            if (!isLevelClearedRef.current) {
-              triggerGameOver('OUT_OF_TURNS');
-            }
+      // 6. Turn limit mechanic: Decrement turnsLeft
+      const activeLevel = currentLevelRef.current;
+      if (activeLevel?.maxTurns || activeLevel?.gimmick === 'TURN_LIMIT') {
+        turnsLeftRef.current = Math.max(0, turnsLeftRef.current - 1);
+        setTurnsLeft(turnsLeftRef.current);
+        if (turnsLeftRef.current <= 0) {
+          // Check if level mission is not already met
+          if (!isLevelClearedRef.current) {
+            triggerGameOver('OUT_OF_TURNS');
           }
         }
       }
@@ -3079,41 +3082,71 @@ export function useSnakeEngine({
         const isBoss = Boolean(activeLevel.isBossLevel);
 
         if (isSpeedRush) {
-          base = Math.max(76, 92 - Math.floor(worldIndex * 0.8));
+          base = Math.max(72, 84 - Math.floor(worldIndex * 0.8));
         } else if (isBoss) {
-          base = Math.max(78, 96 - Math.floor(id * 0.05));
+          base = Math.max(75, 88 - Math.floor(id * 0.05));
         } else if (isPlainLevel) {
-          // 無障礙單純吃蘋果的無聊關卡：加快節奏避免冗長拖沓
-          base = Math.max(82, 100 - Math.floor(worldIndex * 0.8));
+          // 無障礙單純吃蘋果關卡：靈敏快速節奏避免冗長拖沓
+          base = Math.max(76, 88 - Math.floor(worldIndex * 0.8));
         } else {
-          base = Math.max(80, 114 - worldIndex * 1.5);
+          base = Math.max(76, 96 - worldIndex * 1.2);
         }
       }
 
       // 隨著蛇身長度增長自然提速
       const length = snake.length;
       if (length > 4) {
-        base = Math.max(68, base - Math.floor((length - 4) / 4) * 2.2);
+        base = Math.max(64, base - Math.floor((length - 4) / 4) * 2.2);
       }
     } else {
-      // Classic smooth progression
+      // Classic smooth responsive progression (Snappy & agile 98ms base instead of sluggish 118ms)
       const length = snake.length;
-      base = Math.max(72, 118 - Math.floor(length / 4) * 3);
+      base = Math.max(68, 98 - Math.floor(length / 4) * 2.8);
     }
 
-    // ⚡ 電磁超頻核心：光速疾行，暴降至 48ms 極速！
-    if (isLightningActive) return 48;
+    // ⚡ 電磁超頻核心：光速疾行，暴降至 46ms 極速！
+    if (isLightningActive) return 46;
     // 烈焰衝鋒：辣椒火衣衝刺提升速度
-    if (isFireActive) return Math.max(50, Math.floor(base * 0.72));
-    return Math.max(45, Math.round(base));
+    if (isFireActive) return Math.max(48, Math.floor(base * 0.72));
+    return Math.max(42, Math.round(base));
   }, [score, snake.length, isSlowActive, isFireActive, isLightningActive, currentLevel]);
 
-  // Main Loop Timer
+  const updateGameRef = useRef(updateGame);
+  updateGameRef.current = updateGame;
+
+  const getSpeedRef = useRef(getSpeed);
+  getSpeedRef.current = getSpeed;
+
+  // Main Game Loop: Smooth, drift-free delta-time tick loop
+  // NEVER torn down or restarted when score/snake length/speed updates, eliminating pause hiccups!
   useEffect(() => {
     if (!isPlaying || isPaused || isGameOver) return;
-    const interval = setInterval(updateGame, getSpeed());
-    return () => clearInterval(interval);
-  }, [isPlaying, isPaused, isGameOver, updateGame, getSpeed]);
+
+    let animId: number;
+    let lastTickTime = performance.now();
+
+    const loop = (now: number) => {
+      animId = requestAnimationFrame(loop);
+
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (isPausedRef.current || !isPlayingRef.current || isGameOverRef.current) return;
+
+      const currentInterval = getSpeedRef.current();
+      const elapsed = now - lastTickTime;
+
+      if (elapsed >= currentInterval) {
+        lastTickTime = now - (elapsed % currentInterval);
+        try {
+          updateGameRef.current();
+        } catch (err) {
+          console.warn('Game tick error:', err);
+        }
+      }
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [isPlaying, isPaused, isGameOver]);
 
   // Countdown Timer (for TIME_ATTACK or timed LEVELS missions)
   useEffect(() => {
@@ -3165,44 +3198,51 @@ export function useSnakeEngine({
     return () => clearInterval(timer);
   }, [isPlaying, isPaused, isGameOver, mode, currentLevel?.targets.surviveSeconds, checkLevelCompletion]);
 
-  // Decay bonus food duration and particle animations
+  // Decay bonus food duration and powerup timer tracking (battery-optimized: only updates state when values actually change)
   useEffect(() => {
     if (!isPlaying || isPaused || isGameOver) return;
     const timer = setInterval(() => {
-      // 1. Bomb ticking and countdown
-      let bombExploded = false;
-      setFoodItems((prev) => {
-        let hasBomb = false;
-        const updated = prev.map((f) => {
-          if (f.type === 'BOMB' && f.bombCountdown !== undefined) {
-            hasBomb = true;
-            const nextCount = Math.max(0, f.bombCountdown - 0.1);
-            if (nextCount <= 0) {
-              bombExploded = true;
+      // 1. Bomb ticking and decaying foods
+      const currentFoods = foodItemsRef.current;
+      const hasDecayingFoods = currentFoods.some((f) => f.bombCountdown !== undefined || f.duration !== undefined);
+
+      if (hasDecayingFoods) {
+        let bombExploded = false;
+        setFoodItems((prev) => {
+          let hasBomb = false;
+          const updated = prev.map((f) => {
+            if (f.type === 'BOMB' && f.bombCountdown !== undefined) {
+              hasBomb = true;
+              const nextCount = Math.max(0, f.bombCountdown - 0.1);
+              if (nextCount <= 0) {
+                bombExploded = true;
+              }
+              return { ...f, bombCountdown: nextCount };
             }
-            return { ...f, bombCountdown: nextCount };
+            if (f.duration !== undefined) {
+              return { ...f, duration: f.duration - 0.1 };
+            }
+            return f;
+          });
+
+          if (hasBomb && Date.now() - lastBombTickRef.current >= 1000) {
+            lastBombTickRef.current = Date.now();
+            soundEngine.playBombTick();
           }
-          if (f.duration !== undefined) {
-            return { ...f, duration: f.duration - 0.1 };
-          }
-          return f;
+
+          const filtered = updated.filter((f) => f.duration === undefined || f.duration > 0);
+          foodItemsRef.current = filtered;
+          return filtered;
         });
 
-        if (hasBomb && Date.now() - lastBombTickRef.current >= 1000) {
-          lastBombTickRef.current = Date.now();
-          soundEngine.playBombTick();
+        if (bombExploded && !isGameOverRef.current && !isLevelClearedRef.current) {
+          soundEngine.playExplosion();
+          triggerGameOver('BOMB_EXPLODED');
+          return;
         }
-
-        return updated.filter((f) => f.duration === undefined || f.duration > 0);
-      });
-
-      if (bombExploded && !isGameOverRef.current && !isLevelClearedRef.current) {
-        soundEngine.playExplosion();
-        triggerGameOver('BOMB_EXPLODED');
-        return;
       }
 
-      // Magnetic food attraction & absorption effect (道具與蘋果被磁力吸入時完全計入關卡目標)
+      // Magnetic food attraction & absorption effect (only executes when a magnet/aura powerup is active)
       if ((isMagnetActiveRef.current || isKeyAuraActiveRef.current || isRainbowActiveRef.current || isLightningActiveRef.current) && snakeRef.current.length > 0) {
         const head = snakeRef.current[0];
         const currentSnake = snakeRef.current;
@@ -3259,64 +3299,76 @@ export function useSnakeEngine({
         }
       }
 
-      // 即時同步各道具剩餘秒數倒數（由食咗嗰一刻開始計，不可累積）
-      const now = Date.now();
-      const sSec = Math.max(0, Math.ceil((Math.max(shieldUntilRef.current, reviveShieldUntilRef.current) - now) / 1000));
-      const slSec = Math.max(0, Math.ceil((slowUntilRef.current - now) / 1000));
-      const fSec = Math.max(0, Math.ceil((fireUntilRef.current - now) / 1000));
-      const mSec = Math.max(0, Math.ceil((magnetUntilRef.current - now) / 1000));
-      const gSec = Math.max(0, Math.ceil((ghostUntilRef.current - now) / 1000));
+      // Check if any powerup is currently active before computing or updating powerUpTimeLeft
+      const hasActivePowerUp =
+        isShieldActiveRef.current ||
+        isSlowActiveRef.current ||
+        isFireActiveRef.current ||
+        isMagnetActiveRef.current ||
+        isGhostActiveRef.current ||
+        isKeyAuraActiveRef.current ||
+        isRainbowActiveRef.current ||
+        isLightningActiveRef.current;
 
-      const kaSec = Math.max(0, Math.ceil((keyAuraUntilRef.current - now) / 1000));
-      const rSec = Math.max(0, Math.ceil((rainbowUntilRef.current - now) / 1000));
-      const lSec = Math.max(0, Math.ceil((lightningUntilRef.current - now) / 1000));
-      setPowerUpTimeLeft((prev) => {
-        if (
-          prev.shield === sSec &&
-          prev.slow === slSec &&
-          prev.fire === fSec &&
-          prev.magnet === mSec &&
-          prev.ghost === gSec &&
-          prev.keyAura === kaSec &&
-          prev.rainbow === rSec &&
-          prev.lightning === lSec
-        ) {
-          return prev;
+      if (hasActivePowerUp) {
+        const now = Date.now();
+        const sSec = Math.max(0, Math.ceil((Math.max(shieldUntilRef.current, reviveShieldUntilRef.current) - now) / 1000));
+        const slSec = Math.max(0, Math.ceil((slowUntilRef.current - now) / 1000));
+        const fSec = Math.max(0, Math.ceil((fireUntilRef.current - now) / 1000));
+        const mSec = Math.max(0, Math.ceil((magnetUntilRef.current - now) / 1000));
+        const gSec = Math.max(0, Math.ceil((ghostUntilRef.current - now) / 1000));
+        const kaSec = Math.max(0, Math.ceil((keyAuraUntilRef.current - now) / 1000));
+        const rSec = Math.max(0, Math.ceil((rainbowUntilRef.current - now) / 1000));
+        const lSec = Math.max(0, Math.ceil((lightningUntilRef.current - now) / 1000));
+
+        setPowerUpTimeLeft((prev) => {
+          if (
+            prev.shield === sSec &&
+            prev.slow === slSec &&
+            prev.fire === fSec &&
+            prev.magnet === mSec &&
+            prev.ghost === gSec &&
+            prev.keyAura === kaSec &&
+            prev.rainbow === rSec &&
+            prev.lightning === lSec
+          ) {
+            return prev;
+          }
+          return { shield: sSec, slow: slSec, fire: fSec, magnet: mSec, ghost: gSec, keyAura: kaSec, rainbow: rSec, lightning: lSec };
+        });
+
+        if (sSec <= 0 && isShieldActiveRef.current) {
+          setIsShieldActive(false);
+          isShieldActiveRef.current = false;
         }
-        return { shield: sSec, slow: slSec, fire: fSec, magnet: mSec, ghost: gSec, keyAura: kaSec, rainbow: rSec, lightning: lSec };
-      });
-
-      if (sSec <= 0 && isShieldActiveRef.current) {
-        setIsShieldActive(false);
-        isShieldActiveRef.current = false;
-      }
-      if (slSec <= 0 && isSlowActiveRef.current) {
-        setIsSlowActive(false);
-        isSlowActiveRef.current = false;
-      }
-      if (fSec <= 0 && isFireActiveRef.current) {
-        setIsFireActive(false);
-        isFireActiveRef.current = false;
-      }
-      if (mSec <= 0 && isMagnetActiveRef.current) {
-        setIsMagnetActive(false);
-        isMagnetActiveRef.current = false;
-      }
-      if (gSec <= 0 && isGhostActiveRef.current) {
-        setIsGhostActive(false);
-        isGhostActiveRef.current = false;
-      }
-      if (kaSec <= 0 && isKeyAuraActiveRef.current) {
-        setIsKeyAuraActive(false);
-        isKeyAuraActiveRef.current = false;
-      }
-      if (rSec <= 0 && isRainbowActiveRef.current) {
-        setIsRainbowActive(false);
-        isRainbowActiveRef.current = false;
-      }
-      if (lSec <= 0 && isLightningActiveRef.current) {
-        setIsLightningActive(false);
-        isLightningActiveRef.current = false;
+        if (slSec <= 0 && isSlowActiveRef.current) {
+          setIsSlowActive(false);
+          isSlowActiveRef.current = false;
+        }
+        if (fSec <= 0 && isFireActiveRef.current) {
+          setIsFireActive(false);
+          isFireActiveRef.current = false;
+        }
+        if (mSec <= 0 && isMagnetActiveRef.current) {
+          setIsMagnetActive(false);
+          isMagnetActiveRef.current = false;
+        }
+        if (gSec <= 0 && isGhostActiveRef.current) {
+          setIsGhostActive(false);
+          isGhostActiveRef.current = false;
+        }
+        if (kaSec <= 0 && isKeyAuraActiveRef.current) {
+          setIsKeyAuraActive(false);
+          isKeyAuraActiveRef.current = false;
+        }
+        if (rSec <= 0 && isRainbowActiveRef.current) {
+          setIsRainbowActive(false);
+          isRainbowActiveRef.current = false;
+        }
+        if (lSec <= 0 && isLightningActiveRef.current) {
+          setIsLightningActive(false);
+          isLightningActiveRef.current = false;
+        }
       }
     }, 100);
 

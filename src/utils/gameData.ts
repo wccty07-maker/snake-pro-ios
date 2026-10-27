@@ -1040,7 +1040,7 @@ export const createDefaultPlayerProfile = (lang?: SupportedLanguage): PlayerProf
     hasCustomLanguage: false,
     hasCompletedTutorial: false,
     hasClaimedTutorialReward: false,
-    controlType: 'SWIPE',
+    controlType: 'DPAD',
     dpadPosition: 'BOTTOM_CENTER',
     showGrid: true,
     unlockedLevel: 1,

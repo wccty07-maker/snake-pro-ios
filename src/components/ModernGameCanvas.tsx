@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Point, Direction, FoodItem, Particle, FloatingText, SnakeSkin, ArenaTheme, LevelMission, RovingSnake, ControlType } from '../types';
 import { GRID_COLS, GRID_ROWS } from '../hooks/useSnakeEngine';
-import { Pause, Play, RotateCcw, Home, Target, ShieldAlert } from 'lucide-react';
+import { Pause, Play, RotateCcw, Home, Target, ShieldAlert, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { soundEngine } from '../utils/audio';
 import { SupportedLanguage, getTranslation } from '../utils/i18n';
 import { getLocalizedLevel } from '../utils/levelsData';
@@ -117,9 +117,10 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   const touchMovedRef = useRef<boolean>(false);
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Swipe gesture tracking
+  // Swipe gesture tracking with intelligent single-stroke direction lock & orthogonal chaining
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  const [touchIndicator, setTouchIndicator] = useState<{ x: number; y: number; active: boolean } | null>(null);
+  const swipeTriggeredDirRef = useRef<Direction | null>(null);
+  const lastTriggerPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Quick double-tap visual ripple animation state
   const [doubleTapRipple, setDoubleTapRipple] = useState<{ x: number; y: number } | null>(null);
@@ -157,25 +158,21 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     }
   }, [onTogglePause, isPaused]);
 
-  // Handle Touch Start
+  // Handle Touch Start (Zero React re-render allocation, instant response)
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
     const touch = e.touches[0];
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
-      setTouchIndicator({
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top,
-        active: true,
-      });
-    }
 
     touchMovedRef.current = false;
+    swipeTriggeredDirRef.current = null;
     touchStartPosRef.current = {
       x: touch.clientX,
       y: touch.clientY,
     };
-
+    lastTriggerPosRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
     touchStartRef.current = {
       x: touch.clientX,
       y: touch.clientY,
@@ -183,46 +180,54 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     };
   };
 
-  // Handle Touch Move
+  // Handle Touch Move (Rock-solid swipe gesture: fires once per stroke, supports clean 90-degree corner chaining)
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStartRef.current || e.touches.length !== 1) return;
+    if (!touchStartPosRef.current || e.touches.length !== 1) return;
     const touch = e.touches[0];
 
-    // Measure total displacement from start to distinguish taps from swipes
-    if (touchStartPosRef.current) {
-      const distFromStart = Math.hypot(
-        touch.clientX - touchStartPosRef.current.x,
-        touch.clientY - touchStartPosRef.current.y
-      );
-      if (distFromStart > 12) {
-        touchMovedRef.current = true;
-      }
+    // Total displacement from touchstart
+    const totalDx = touch.clientX - touchStartPosRef.current.x;
+    const totalDy = touch.clientY - touchStartPosRef.current.y;
+    const totalDist = Math.hypot(totalDx, totalDy);
+
+    if (totalDist > 8) {
+      touchMovedRef.current = true;
     }
 
-    const dx = touch.clientX - touchStartRef.current.x;
-    const dy = touch.clientY - touchStartRef.current.y;
-    const minDistance = 16; // ultra-responsive swipe threshold
+    // 1. Initial turn recognition for this stroke (low 10px threshold for instant response)
+    if (!swipeTriggeredDirRef.current) {
+      if (totalDist >= 10) {
+        let detectedDir: Direction;
+        if (Math.abs(totalDx) >= Math.abs(totalDy)) {
+          detectedDir = totalDx > 0 ? 'RIGHT' : 'LEFT';
+        } else {
+          detectedDir = totalDy > 0 ? 'DOWN' : 'UP';
+        }
 
-    if (Math.abs(dx) > minDistance || Math.abs(dy) > minDistance) {
-      if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx > 0) {
-          onDirectionChange('RIGHT');
-        } else {
-          onDirectionChange('LEFT');
-        }
-      } else {
-        if (dy > 0) {
-          onDirectionChange('DOWN');
-        } else {
-          onDirectionChange('UP');
-        }
+        swipeTriggeredDirRef.current = detectedDir;
+        lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
+        onDirectionChange(detectedDir);
       }
-      // Reset start to continuous smooth gestures
-      touchStartRef.current = {
-        x: touch.clientX,
-        y: touch.clientY,
-        time: Date.now(),
-      };
+    } else if (lastTriggerPosRef.current) {
+      // 2. Chained orthogonal turn without lifting thumb (e.g. sharp corner flick)
+      const curDx = touch.clientX - lastTriggerPosRef.current.x;
+      const curDy = touch.clientY - lastTriggerPosRef.current.y;
+      const prevDir = swipeTriggeredDirRef.current;
+      const isPrevHorizontal = prevDir === 'LEFT' || prevDir === 'RIGHT';
+
+      // If previous was horizontal, look for decisive vertical motion (> 22px)
+      if (isPrevHorizontal && Math.abs(curDy) >= 22 && Math.abs(curDy) > Math.abs(curDx) * 1.4) {
+        const nextDir: Direction = curDy > 0 ? 'DOWN' : 'UP';
+        swipeTriggeredDirRef.current = nextDir;
+        lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
+        onDirectionChange(nextDir);
+      } else if (!isPrevHorizontal && Math.abs(curDx) >= 22 && Math.abs(curDx) > Math.abs(curDy) * 1.4) {
+        // If previous was vertical, look for decisive horizontal motion (> 22px)
+        const nextDir: Direction = curDx > 0 ? 'RIGHT' : 'LEFT';
+        swipeTriggeredDirRef.current = nextDir;
+        lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
+        onDirectionChange(nextDir);
+      }
     }
   };
 
@@ -230,7 +235,8 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   const handleTouchEnd = (e: React.TouchEvent) => {
     const endTouch = e.changedTouches[0];
     touchStartRef.current = null;
-    setTouchIndicator(null);
+    swipeTriggeredDirRef.current = null;
+    lastTriggerPosRef.current = null;
 
     // If finger was stationary (not a swipe drag), test for double tap!
     if (!touchMovedRef.current && endTouch && touchStartPosRef.current) {
@@ -327,7 +333,9 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       gH: number,
       cW: number,
       cH: number,
-      enableGlow: boolean
+      enableGlow: boolean,
+      currentObstacles?: Point[],
+      mission?: LevelMission
     ) => {
       const offCtx = targetCanvas.getContext('2d');
       if (!offCtx) return;
@@ -416,6 +424,171 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       offCtx.lineTo(w - 14, 2.5);
       offCtx.stroke();
       offCtx.restore();
+
+      // 4. Bake Themed Obstacles into offscreen cache (saves hundreds of path operations per frame!)
+      if (currentObstacles && currentObstacles.length > 0) {
+        const worldId = mission?.worldId || 1;
+        currentObstacles.forEach((obs) => {
+          const ox = gX + obs.x * cW;
+          const oy = gY + obs.y * cH;
+          offCtx.save();
+          if (worldId === 2) {
+            offCtx.fillStyle = '#0f766e';
+            offCtx.strokeStyle = '#2dd4bf';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.fillStyle = '#5eead4';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2.5, 0, Math.PI * 2);
+            offCtx.fill();
+          } else if (worldId === 3) {
+            offCtx.fillStyle = '#db2777';
+            offCtx.strokeStyle = '#f472b6';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.fillStyle = '#fdf2f8';
+            offCtx.fillRect(ox + 4, oy + cH / 2 - 1.5, cW - 8, 3);
+          } else if (worldId === 4) {
+            offCtx.fillStyle = '#290e05';
+            offCtx.strokeStyle = '#f97316';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.strokeStyle = '#fb923c';
+            offCtx.lineWidth = 1.2;
+            offCtx.beginPath();
+            offCtx.moveTo(ox + 4, oy + 4);
+            offCtx.lineTo(ox + cW / 2, oy + cH / 2);
+            offCtx.lineTo(ox + cW - 4, oy + cH - 4);
+            offCtx.stroke();
+          } else if (worldId === 5) {
+            offCtx.fillStyle = '#0f172a';
+            offCtx.strokeStyle = '#38bdf8';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 5);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.strokeStyle = '#f43f5e';
+            offCtx.lineWidth = 1.2;
+            offCtx.beginPath();
+            offCtx.moveTo(ox + cW / 2, oy + 4);
+            offCtx.lineTo(ox + cW / 2, oy + cH - 4);
+            offCtx.stroke();
+          } else if (worldId === 6) {
+            offCtx.fillStyle = '#2e1065';
+            offCtx.strokeStyle = '#a855f7';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.fillStyle = '#c084fc';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2.5, 0, Math.PI * 2);
+            offCtx.fill();
+          } else if (worldId === 7) {
+            offCtx.fillStyle = '#0c4a6e';
+            offCtx.strokeStyle = '#38bdf8';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 7);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.fillStyle = '#7dd3fc';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2.5, 0, Math.PI * 2);
+            offCtx.fill();
+          } else if (worldId === 8 || worldId === 16) {
+            offCtx.fillStyle = '#075985';
+            offCtx.strokeStyle = '#38bdf8';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.fillStyle = '#e0f2fe';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2, 0, Math.PI * 2);
+            offCtx.fill();
+          } else if (worldId === 9) {
+            offCtx.fillStyle = '#18181b';
+            offCtx.strokeStyle = '#f43f5e';
+            offCtx.lineWidth = 2.2;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.strokeStyle = '#fb7185';
+            offCtx.lineWidth = 1.4;
+            offCtx.beginPath();
+            offCtx.moveTo(ox + 5, oy + cH / 2);
+            offCtx.lineTo(ox + cW - 5, oy + cH / 2);
+            offCtx.moveTo(ox + cW / 2, oy + 5);
+            offCtx.lineTo(ox + cW / 2, oy + cH - 5);
+            offCtx.stroke();
+            offCtx.fillStyle = '#e11d48';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2.5, 0, Math.PI * 2);
+            offCtx.fill();
+          } else if (worldId === 10 || worldId === 17) {
+            offCtx.fillStyle = '#1e293b';
+            offCtx.strokeStyle = '#ef4444';
+            offCtx.lineWidth = 2;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.strokeStyle = '#f59e0b';
+            offCtx.lineWidth = 1.5;
+            offCtx.beginPath();
+            offCtx.moveTo(ox + 4, oy + cH - 4);
+            offCtx.lineTo(ox + cW - 4, oy + 4);
+            offCtx.stroke();
+          } else if (worldId === 11) {
+            offCtx.fillStyle = '#581c87';
+            offCtx.strokeStyle = '#c084fc';
+            offCtx.lineWidth = 1.8;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 6);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.fillStyle = '#f43f5e';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2.5, 0, Math.PI * 2);
+            offCtx.fill();
+          } else {
+            offCtx.fillStyle = '#78350f';
+            offCtx.strokeStyle = '#b45309';
+            offCtx.lineWidth = 1.6;
+            offCtx.beginPath();
+            offCtx.roundRect(ox + 2, oy + 2, cW - 4, cH - 4, 7);
+            offCtx.fill();
+            offCtx.stroke();
+            offCtx.strokeStyle = '#92400e';
+            offCtx.lineWidth = 1;
+            offCtx.beginPath();
+            offCtx.moveTo(ox + 4, oy + cH / 2);
+            offCtx.lineTo(ox + cW - 4, oy + cH / 2);
+            offCtx.moveTo(ox + cW / 2, oy + 4);
+            offCtx.lineTo(ox + cW / 2, oy + cH - 4);
+            offCtx.stroke();
+            offCtx.fillStyle = '#fef3c7';
+            offCtx.beginPath();
+            offCtx.arc(ox + cW / 2, oy + cH / 2, 2, 0, Math.PI * 2);
+            offCtx.fill();
+          }
+          offCtx.restore();
+        });
+      }
     },
     [arena, showGrid]
   );
@@ -444,8 +617,8 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Offscreen background layer caching (caches static backdrop, grid mat, grid lines, and boundary wall)
-    const currentBgKey = `${width}x${height}_${arena.id}_${showGrid}_${batterySaverEnabled}_${glowEffectsEnabled}`;
+    // 1. Offscreen background layer caching (caches static backdrop, grid mat, grid lines, boundary wall, AND obstacles)
+    const currentBgKey = `${width}x${height}_${arena.id}_${showGrid}_${batterySaverEnabled}_${currentMission?.id || 0}_${obstacles?.length || 0}`;
     if (
       !offscreenCanvasRef.current ||
       offscreenCanvasRef.current.width !== width ||
@@ -468,10 +641,11 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         gridHeight,
         cellW,
         cellH,
-        enableGlow
+        enableGlow,
+        obstacles,
+        currentMission
       );
     }
-
     // High performance single texture blit (draws background moat, grid mat, grid lines, obstacles, boundary wall)
     if (offscreenCanvasRef.current) {
       ctx.drawImage(offscreenCanvasRef.current, 0, 0);
@@ -594,194 +768,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(isMatch ? '🔓' : '🔒', gx + cellW / 2, gy + cellH / 2);
-        ctx.restore();
-      });
-    }
-
-    // 3.8. Draw Themed Obstacles dynamically (Direct reactive rendering: always 100% in sync with level obstacles)
-    if (obstacles && obstacles.length > 0) {
-      const worldId = currentMission?.worldId || 1;
-      obstacles.forEach((obs) => {
-        const ox = gridX + obs.x * cellW;
-        const oy = gridY + obs.y * cellH;
-
-        ctx.save();
-        if (worldId === 2) {
-          // Jade Monolith (翡翠神柱)
-          ctx.fillStyle = '#0f766e';
-          ctx.strokeStyle = '#2dd4bf';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#5eead4';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (worldId === 3) {
-          // Sweet Candy Kingdom (糖果甜點威化柱)
-          ctx.fillStyle = '#db2777';
-          ctx.strokeStyle = '#f472b6';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#fdf2f8';
-          ctx.fillRect(ox + 4, oy + cellH / 2 - 1.5, cellW - 8, 3);
-        } else if (worldId === 4) {
-          // Molten Magma Basalt (玄武熔岩石)
-          ctx.fillStyle = '#290e05';
-          ctx.strokeStyle = '#f97316';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          // Glowing magma crack
-          ctx.strokeStyle = '#fb923c';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.moveTo(ox + 4, oy + 4);
-          ctx.lineTo(ox + cellW / 2, oy + cellH / 2);
-          ctx.lineTo(ox + cellW - 4, oy + cellH - 4);
-          ctx.stroke();
-        } else if (worldId === 5) {
-          // Neon Cyber Circuit Grid (高壓霓虹光柵)
-          ctx.fillStyle = '#0f172a';
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 5);
-          ctx.fill();
-          ctx.stroke();
-          ctx.strokeStyle = '#f43f5e';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.moveTo(ox + cellW / 2, oy + 4);
-          ctx.lineTo(ox + cellW / 2, oy + cellH - 4);
-          ctx.stroke();
-        } else if (worldId === 6) {
-          // Phantom Shadow Tombstone (幽冥石碑)
-          ctx.fillStyle = '#2e1065';
-          ctx.strokeStyle = '#a855f7';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#c084fc';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (worldId === 7) {
-          // Deep Sea Coral Reef (深海水晶礁)
-          ctx.fillStyle = '#0c4a6e';
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 7);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#7dd3fc';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (worldId === 8 || worldId === 16) {
-          // Glacial Ice Peak (極地冰霜岩)
-          ctx.fillStyle = '#075985';
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#e0f2fe';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (worldId === 9) {
-          // Foggy Shrouded Woods (迷霧幽暗林 · 巨龍荊棘黑曜岩)
-          // High-visibility crisp border + glowing crimson/rose core (eliminates blending into dark fog)
-          ctx.fillStyle = '#18181b';
-          ctx.strokeStyle = '#f43f5e';
-          ctx.lineWidth = 2.2;
-          if (enableGlow) {
-            ctx.shadowColor = 'rgba(244, 63, 94, 0.7)';
-            ctx.shadowBlur = 0;
-          }
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-
-          // Spooky thorn cross rune
-          ctx.strokeStyle = '#fb7185';
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.moveTo(ox + 5, oy + cellH / 2);
-          ctx.lineTo(ox + cellW - 5, oy + cellH / 2);
-          ctx.moveTo(ox + cellW / 2, oy + 5);
-          ctx.lineTo(ox + cellW / 2, oy + cellH - 5);
-          ctx.stroke();
-
-          // Center glowing ruby dot
-          ctx.fillStyle = '#e11d48';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (worldId === 10 || worldId === 17) {
-          // Demolition Blast Barricade (爆破危險鋼障)
-          ctx.fillStyle = '#1e293b';
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          // Hazard warning stripe
-          ctx.strokeStyle = '#f59e0b';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(ox + 4, oy + cellH - 4);
-          ctx.lineTo(ox + cellW - 4, oy + 4);
-          ctx.stroke();
-        } else if (worldId === 11) {
-          // Prismatic Realm (七彩稜鏡結晶)
-          ctx.fillStyle = '#581c87';
-          ctx.strokeStyle = '#c084fc';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#f43f5e';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          // Classic Timber / Stone Block
-          ctx.fillStyle = '#78350f';
-          ctx.strokeStyle = '#b45309';
-          ctx.lineWidth = 1.6;
-          ctx.beginPath();
-          ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 7);
-          ctx.fill();
-          ctx.stroke();
-          ctx.strokeStyle = '#92400e';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(ox + 4, oy + cellH / 2);
-          ctx.lineTo(ox + cellW - 4, oy + cellH / 2);
-          ctx.moveTo(ox + cellW / 2, oy + 4);
-          ctx.lineTo(ox + cellW / 2, oy + cellH - 4);
-          ctx.stroke();
-          ctx.fillStyle = '#fef3c7';
-          ctx.beginPath();
-          ctx.arc(ox + cellW / 2, oy + cellH / 2, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
         ctx.restore();
       });
     }
@@ -1522,39 +1508,11 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
           ? (i % 2 === 0 ? '#4ade80' : '#16a34a')
           : (i % 2 === 0 ? skin.bodyColor : skin.tailColor);
 
-        const beadGrad = ctx.createRadialGradient(
-          segX - segRadius * 0.3,
-          segY - segRadius * 0.3,
-          segRadius * 0.1,
-          segX,
-          segY,
-          segRadius
-        );
-        const segGlint = snakeColor === 'RED'
-          ? '#fee2e2'
-          : snakeColor === 'BLUE'
-          ? '#e0f2fe'
-          : snakeColor === 'GREEN'
-          ? '#dcfce7'
-          : '#ffffff';
-        beadGrad.addColorStop(0, segGlint);
-        beadGrad.addColorStop(0.25, segColor);
-        beadGrad.addColorStop(1, segColor);
-        ctx.fillStyle = beadGrad;
-
-        if (snakeGlowBlur > 0) {
-          ctx.shadowColor = snakeGlowColor;
-          ctx.shadowBlur = 0;
-        } else {
-          ctx.shadowBlur = 0;
-        }
-
+        // High performance 3D Jelly Bead: Solid vibrant body with specular glint (Zero GC allocations!)
+        ctx.fillStyle = segColor;
         ctx.beginPath();
         ctx.arc(segX, segY, segRadius, 0, Math.PI * 2);
         ctx.fill();
-
-        // Immediately reset shadowBlur to 0 so segment surface details do not trigger Gaussian blur passes
-        ctx.shadowBlur = 0;
 
         // 1. Neon Digital Grid authentic ladder ribs & sparkles
         if (skin.id === 'neon_viper' || skin.id === 'neon_aurora') {
@@ -1565,13 +1523,18 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
           ctx.lineTo(segX + segRadius * 0.7, segY);
           ctx.stroke();
 
-          // Sparkle star on alternating segments
+          // Lightweight vector sparkle star on alternating segments (avoids canvas font layout overhead)
           if (i % 3 === 0) {
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 10px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('✦', segX + segRadius * 0.45, segY - segRadius * 0.35);
+            const sx = segX + segRadius * 0.45;
+            const sy = segY - segRadius * 0.35;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(sx - 2.5, sy);
+            ctx.lineTo(sx + 2.5, sy);
+            ctx.moveTo(sx, sy - 2.5);
+            ctx.lineTo(sx, sy + 2.5);
+            ctx.stroke();
           }
         } else if (skin.id === 'neon_caterpillar') {
           // Neon caterpillar bright green outline rings
@@ -1588,10 +1551,10 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
           ctx.fill();
         }
 
-        // Glossy Specular glint on upper-left
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        // 3D Candy glossy specular glint on upper-left
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
         ctx.beginPath();
-        ctx.arc(segX - segRadius * 0.35, segY - segRadius * 0.35, segRadius * 0.28, 0, Math.PI * 2);
+        ctx.arc(segX - segRadius * 0.3, segY - segRadius * 0.3, segRadius * 0.35, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -2677,17 +2640,11 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   const renderRef = useRef(render);
   renderRef.current = render;
 
-  // Canvas size and animation loop with smooth 60 FPS pacing & battery-saver throttling
+  // Canvas animation loop with zero-jitter vsync pacing & battery-saver throttling
   useEffect(() => {
     let animId: number;
     let lastFrameTime = performance.now();
-    let pauseTickCount = 0;
-
-    // Smooth frame rate limiter:
-    // - Battery saver mode: 30 FPS (~33.3ms)
-    // - Standard mode: Smooth 60 FPS (~16.6ms), eliminating 120Hz runaway rendering on ProMotion screens
-    const effectiveFps = batterySaverEnabled ? 30 : (targetFps || 60);
-    const minFrameInterval = 1000 / effectiveFps - 1.2;
+    let tickCount = 0;
 
     const update = (now: number) => {
       animId = requestAnimationFrame(update);
@@ -2699,17 +2656,26 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
       // 2. When paused, throttle canvas redraw to ~2 FPS (every 30 ticks) to minimize CPU/GPU load
       if (isPaused) {
-        pauseTickCount++;
-        if (pauseTickCount % 30 !== 0) {
+        tickCount++;
+        if (tickCount % 30 !== 0) {
           return;
         }
+      } else if (batterySaverEnabled) {
+        // 3. Battery saver: Clean 30 FPS (renders every other vsync frame, zero modulo float jitter)
+        tickCount++;
+        if (tickCount % 2 !== 0) {
+          return;
+        }
+        lastFrameTime = now;
       } else {
-        // 3. Frame rate pacing: drop redundant frames on 120Hz ProMotion screens
+        // 4. Standard 60 FPS mode:
+        // On 120Hz ProMotion displays (now - lastFrameTime < 11ms), skip alternate frame to avoid runaway 120Hz drain.
+        // On standard 60Hz displays, render every single vsync frame with 0 dropped frames.
         const elapsed = now - lastFrameTime;
-        if (elapsed < minFrameInterval) {
+        if (elapsed < 11.0) {
           return;
         }
-        lastFrameTime = now - (elapsed % minFrameInterval);
+        lastFrameTime = now;
       }
 
       // 4. Update particle & floating text physics directly on fxRef with zero React re-renders
@@ -2818,14 +2784,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
               : 'shadow-pink-950/50 bg-slate-950'
           }`}
         />
-
-        {/* Swipe touch feedback pulse */}
-        {touchIndicator && (
-          <div
-            className="absolute w-12 h-12 -ml-6 -mt-6 rounded-full border-2 border-pink-400/90 bg-pink-500/25 pointer-events-none animate-ping"
-            style={{ left: touchIndicator.x, top: touchIndicator.y }}
-          />
-        )}
 
         {/* Double tap ripple & pause feedback */}
         {doubleTapRipple && (
@@ -3017,6 +2975,102 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* 2. Mobile Directional Controls & Mode Switcher */}
+      <div className="w-full shrink-0 flex flex-col items-center justify-center select-none touch-none px-4 pb-0.5 pt-0.5">
+        {controlType === 'DPAD' ? (
+          <div className="relative flex items-center justify-between w-full max-w-[340px] px-2">
+            {/* Quick Mode Toggle Pill */}
+            <button
+              type="button"
+              onClick={() => onToggleControlType?.('SWIPE')}
+              className="px-2.5 py-1.5 rounded-full bg-slate-900/85 border border-slate-700/80 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1 active:scale-95 transition-all shadow-md cursor-pointer"
+            >
+              <span>👆</span>
+              <span>{language === 'en' ? 'Swipe' : language === 'ja' ? 'スワイプ' : '切換滑動'}</span>
+            </button>
+
+            {/* Cross D-Pad */}
+            <div className="grid grid-cols-3 grid-rows-3 gap-1.5 w-[132px] h-[132px] p-1 bg-slate-950/70 rounded-3xl border border-slate-800/80 shadow-2xl">
+              <div />
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onDirectionChange('UP');
+                }}
+                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
+                title="Up"
+              >
+                <ChevronUp className="w-6 h-6 stroke-[3]" />
+              </button>
+              <div />
+
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onDirectionChange('LEFT');
+                }}
+                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
+                title="Left"
+              >
+                <ChevronLeft className="w-6 h-6 stroke-[3]" />
+              </button>
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-3.5 h-3.5 rounded-full bg-slate-700/60 border border-slate-600/60" />
+              </div>
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onDirectionChange('RIGHT');
+                }}
+                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
+                title="Right"
+              >
+                <ChevronRight className="w-6 h-6 stroke-[3]" />
+              </button>
+
+              <div />
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onDirectionChange('DOWN');
+                }}
+                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
+                title="Down"
+              >
+                <ChevronDown className="w-6 h-6 stroke-[3]" />
+              </button>
+              <div />
+            </div>
+
+            {/* Quick Pause Button */}
+            <button
+              type="button"
+              onClick={onTogglePause}
+              className="px-2.5 py-1.5 rounded-full bg-slate-900/85 border border-slate-700/80 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1 active:scale-95 transition-all shadow-md cursor-pointer"
+            >
+              <Pause className="w-3.5 h-3.5" />
+              <span>{language === 'en' ? 'Pause' : language === 'ja' ? '一時停止' : '暫停'}</span>
+            </button>
+          </div>
+        ) : (
+          /* When in Swipe mode, show a small toggle pill at the bottom */
+          <div className="flex items-center justify-center py-0.5">
+            <button
+              type="button"
+              onClick={() => onToggleControlType?.('DPAD')}
+              className="px-3 py-1 rounded-full bg-slate-900/70 hover:bg-slate-800/90 border border-slate-700/60 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1.5 active:scale-95 transition-all shadow-sm cursor-pointer"
+            >
+              <span>🕹️</span>
+              <span>{language === 'en' ? 'Switch to D-Pad' : language === 'ja' ? '十字キーに切替' : '切換方向鍵'}</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

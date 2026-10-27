@@ -210,7 +210,7 @@ export default function App() {
           lastSelectedLevel: safeLastSelected,
           completedLevels: sequentialCompleted,
           unlockAllLevels: false,
-          controlType: parsed.controlType || 'SWIPE',
+          controlType: parsed.controlType || 'DPAD',
           dailyMissionsDate: todayStr,
           dailyMissions: currentDailyMissions,
           dailyAdWatchDate: parsed.dailyAdWatchDate === todayStr ? todayStr : todayStr,
@@ -2101,10 +2101,14 @@ export default function App() {
 
   return (
     <div className="w-full h-full min-h-[100dvh] flex-1 max-w-[480px] mx-auto text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white overflow-hidden relative overscroll-none bg-[#060914] bg-[url('/assets/neon_digital_grid_bg.svg')] bg-cover bg-center bg-no-repeat shadow-2xl">
-      {/* Decorative ambient neon glow orbs */}
-      <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none animate-pulse-glow" />
-      <div className="absolute top-1/3 -right-16 w-60 h-60 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none animate-pulse-glow" style={{ animationDelay: '2s' }} />
-      <div className="absolute -bottom-16 left-1/4 w-52 h-52 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none animate-pulse-glow" style={{ animationDelay: '3s' }} />
+      {/* Decorative ambient neon glow orbs (Static during gameplay to save GPU power and battery) */}
+      {appView === 'HOME' && (
+        <>
+          <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-cyan-500/15 blur-2xl pointer-events-none" />
+          <div className="absolute top-1/3 -right-16 w-60 h-60 rounded-full bg-indigo-500/15 blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-16 left-1/4 w-52 h-52 rounded-full bg-cyan-400/10 blur-2xl pointer-events-none" />
+        </>
+      )}
 
       {/* Top Header with Hearts in top-left - Always unified and visible */}
       <GameHeader
