@@ -1,0 +1,14 @@
+{
+	"appId": "elemall.snakegame.1",
+	"appName": "Snake Pro",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"iosScheme": "capacitor"
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"preferredContentMode": "mobile"
+	},
+	"packageClassList": []
+}
