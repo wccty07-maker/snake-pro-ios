@@ -108,11 +108,9 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Offscreen canvas background layer cache & proxy cache (Zero-allocation & offscreen blit)
+  // Offscreen canvas background layer cache (Zero-allocation offscreen blit)
   const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgCacheKeyRef = useRef<string>('');
-  const proxyCtxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const lastRawCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   // Double tap detection refs
   const lastTapRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -429,35 +427,9 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     const rawCtx = canvas.getContext('2d');
     if (!rawCtx) return;
 
-    // In Battery Saver mode (or when glow is disabled), reuse cached proxy to stop GPU gaussian blur passes
-    // Zero-allocation: Reuses proxyCtxRef instead of creating new Proxy on every frame!
+    // Enable soft glow when not in battery saver mode
     const enableGlow = !batterySaverEnabled && (glowEffectsEnabled ?? true);
-    let ctx = rawCtx;
-    if (!enableGlow) {
-      if (!proxyCtxRef.current || lastRawCtxRef.current !== rawCtx) {
-        lastRawCtxRef.current = rawCtx;
-        proxyCtxRef.current = new Proxy(rawCtx, {
-          set(target, prop, value) {
-            if (prop === 'shadowBlur') {
-              target.shadowBlur = 0;
-              return true;
-            }
-            // @ts-ignore
-            target[prop] = value;
-            return true;
-          },
-          get(target, prop) {
-            // @ts-ignore
-            const val = target[prop];
-            if (typeof val === 'function') {
-              return val.bind(target);
-            }
-            return val;
-          },
-        }) as CanvasRenderingContext2D;
-      }
-      ctx = proxyCtxRef.current;
-    }
+    const ctx = rawCtx;
 
     const width = canvas.width;
     const height = canvas.height;
@@ -1500,43 +1472,43 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     // 5. Draw Snake Body & Glow (Cute 3D Candy Gummy Beads)
     if (snake.length > 0) {
       ctx.save();
-      // Rainbow Fever / Ghost Mode translucency & aura glows
+      // Compute snake body aura glow (capped for mobile 60 FPS performance)
+      let snakeGlowColor = skin.glowColor;
+      let snakeGlowBlur = enableGlow ? 6 : 0;
       if (isLightningActive) {
-        ctx.shadowColor = 'rgba(217, 70, 239, 0.98)';
-        ctx.shadowBlur = 32;
+        snakeGlowColor = 'rgba(217, 70, 239, 0.98)';
+        snakeGlowBlur = enableGlow ? 10 : 0;
       } else if (isRainbowActive) {
         const glowHue = Math.floor((Date.now() / 15) % 360);
-        ctx.shadowColor = `hsl(${glowHue}, 100%, 65%)`;
-        ctx.shadowBlur = 28;
+        snakeGlowColor = `hsl(${glowHue}, 100%, 65%)`;
+        snakeGlowBlur = enableGlow ? 8 : 0;
       } else if (isGhostActive) {
         ctx.globalAlpha = 0.65;
-        ctx.shadowColor = 'rgba(192, 132, 252, 0.95)';
-        ctx.shadowBlur = 24;
+        snakeGlowColor = 'rgba(192, 132, 252, 0.95)';
+        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (isKeyAuraActive) {
-        ctx.shadowColor = 'rgba(234, 179, 8, 0.95)';
-        ctx.shadowBlur = 26;
+        snakeGlowColor = 'rgba(234, 179, 8, 0.95)';
+        snakeGlowBlur = enableGlow ? 8 : 0;
       } else if (isFireActive) {
-        ctx.shadowColor = 'rgba(249, 115, 22, 0.95)';
-        ctx.shadowBlur = 24;
+        snakeGlowColor = 'rgba(249, 115, 22, 0.95)';
+        snakeGlowBlur = enableGlow ? 8 : 0;
       } else if (isMagnetActive) {
-        ctx.shadowColor = 'rgba(6, 182, 212, 0.95)';
-        ctx.shadowBlur = 22;
+        snakeGlowColor = 'rgba(6, 182, 212, 0.95)';
+        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (isShieldActive) {
-        ctx.shadowColor = 'rgba(56, 189, 248, 0.9)';
-        ctx.shadowBlur = 18;
+        snakeGlowColor = 'rgba(56, 189, 248, 0.9)';
+        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (snakeColor === 'RED') {
-        ctx.shadowColor = 'rgba(239, 68, 68, 0.95)';
-        ctx.shadowBlur = 20;
+        snakeGlowColor = 'rgba(239, 68, 68, 0.95)';
+        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (snakeColor === 'BLUE') {
-        ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-        ctx.shadowBlur = 20;
+        snakeGlowColor = 'rgba(56, 189, 248, 0.95)';
+        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (snakeColor === 'GREEN') {
-        ctx.shadowColor = 'rgba(34, 197, 94, 0.95)';
-        ctx.shadowBlur = 20;
-      } else {
-        ctx.shadowColor = skin.glowColor;
-        ctx.shadowBlur = 12;
+        snakeGlowColor = 'rgba(34, 197, 94, 0.95)';
+        snakeGlowBlur = enableGlow ? 6 : 0;
       }
+      ctx.shadowBlur = 0;
 
       // Draw Body Segments from tail to head
       for (let i = snake.length - 1; i >= 1; i--) {
@@ -1580,9 +1552,19 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         beadGrad.addColorStop(1, segColor);
         ctx.fillStyle = beadGrad;
 
+        if (snakeGlowBlur > 0) {
+          ctx.shadowColor = snakeGlowColor;
+          ctx.shadowBlur = snakeGlowBlur;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
         ctx.beginPath();
         ctx.arc(segX, segY, segRadius, 0, Math.PI * 2);
         ctx.fill();
+
+        // Immediately reset shadowBlur to 0 so segment surface details do not trigger Gaussian blur passes
+        ctx.shadowBlur = 0;
 
         // 1. Neon Digital Grid authentic ladder ribs & sparkles
         if (skin.id === 'neon_viper' || skin.id === 'neon_aurora') {
@@ -1631,6 +1613,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
       // 1. Cute Monster Horns / Dragon Ear Fins (Positioned behind head based on direction)
       ctx.save();
+      ctx.shadowBlur = 0;
       const hornColor = snakeColor === 'RED'
         ? '#fca5a5'
         : snakeColor === 'BLUE'
@@ -1704,9 +1687,19 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       headGrad.addColorStop(1, headFillColor);
       ctx.fillStyle = headGrad;
 
+      if (snakeGlowBlur > 0) {
+        ctx.shadowColor = snakeGlowColor;
+        ctx.shadowBlur = snakeGlowBlur;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
       ctx.beginPath();
       ctx.arc(headX, headY, headRadius, 0, Math.PI * 2);
       ctx.fill();
+
+      // Reset shadowBlur so face details, eyes, pupils and smiles are drawn crisp and lag-free
+      ctx.shadowBlur = 0;
 
       // Chameleon Element Aura ring when snake body is transformed
       if (snakeColor && snakeColor !== 'NORMAL' && !isRainbowActive) {
@@ -1939,9 +1932,8 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       if (!rs.body || rs.body.length === 0) return;
 
       ctx.save();
-      // Danger Glow aura
-      ctx.shadowColor = rs.glowColor;
-      ctx.shadowBlur = 12;
+      const rovingGlowBlur = enableGlow ? 6 : 0;
+      ctx.shadowBlur = 0;
 
       // Draw Body Segments (tail to neck)
       for (let i = rs.body.length - 1; i >= 1; i--) {
@@ -1965,9 +1957,18 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         beadGrad.addColorStop(1, '#0f172a');
         ctx.fillStyle = beadGrad;
 
+        if (rovingGlowBlur > 0) {
+          ctx.shadowColor = rs.glowColor;
+          ctx.shadowBlur = rovingGlowBlur;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
         ctx.beginPath();
         ctx.arc(segX, segY, segRadius, 0, Math.PI * 2);
         ctx.fill();
+
+        ctx.shadowBlur = 0;
 
         // Scale markings
         if (i % 2 === 0) {
@@ -2024,9 +2025,18 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       headGrad.addColorStop(1, rs.bodyColor);
       ctx.fillStyle = headGrad;
 
+      if (rovingGlowBlur > 0) {
+        ctx.shadowColor = rs.glowColor;
+        ctx.shadowBlur = rovingGlowBlur;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
       ctx.beginPath();
       ctx.arc(headX, headY, headRadius, 0, Math.PI * 2);
       ctx.fill();
+
+      ctx.shadowBlur = 0;
 
       // Fierce Slit Eyes
       const eyeR = headRadius * 0.28;
@@ -2051,7 +2061,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       const [e1, e2] = eyeOffsets[rs.direction] || eyeOffsets.RIGHT;
 
       // Sclera / Glowing Eye
-      ctx.shadowBlur = 6;
       ctx.fillStyle = rs.eyeColor;
       ctx.beginPath();
       ctx.arc(e1.x, e1.y, eyeR, 0, Math.PI * 2);
@@ -2125,10 +2134,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       ctx.save();
       ctx.globalAlpha = p.alpha;
       ctx.fillStyle = p.color;
-      if (enableGlow) {
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 6;
-      }
+      ctx.shadowBlur = 0;
       ctx.beginPath();
       ctx.arc(gridX + p.x * cellW + cellW / 2, gridY + p.y * cellH + cellH / 2, p.size, 0, Math.PI * 2);
       ctx.fill();
@@ -2675,12 +2681,13 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     renderOffscreenBackground,
   ]);
 
-  // Canvas size and animation loop with dynamic FPS throttling & visibility sleep
+  const renderRef = useRef(render);
+  renderRef.current = render;
+
+  // Canvas size and animation loop with native hardware VSync & battery-saver throttling
   useEffect(() => {
     let animId: number;
     let lastFrameTime = performance.now();
-    const effectiveFps = batterySaverEnabled ? 30 : (targetFps || 60);
-    const frameInterval = 1000 / effectiveFps;
     let pauseTickCount = 0;
 
     const update = (now: number) => {
@@ -2699,7 +2706,17 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         }
       }
 
-      // 2.5. Update particle & floating text physics directly on fxRef with zero React re-renders (Point 2)
+      // 3. Throttle only when Battery Saver mode is active (locks to ~30 FPS for battery saving)
+      // In standard mode, render directly on native hardware VSync with zero dropped frames or micro-stutters!
+      if (batterySaverEnabled) {
+        const elapsed = now - lastFrameTime;
+        if (elapsed < 31) {
+          return;
+        }
+        lastFrameTime = now;
+      }
+
+      // 4. Update particle & floating text physics directly on fxRef with zero React re-renders
       const fx = fxRef?.current;
       if (fx && !isPaused) {
         if (fx.particles.length > 0) {
@@ -2738,15 +2755,8 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         }
       }
 
-      // 3. FPS Capping (throttling against high refresh rate displays like 90Hz/120Hz/ProMotion)
-      const elapsed = now - lastFrameTime;
-      if (elapsed < frameInterval - 1) {
-        return;
-      }
-      lastFrameTime = now - (elapsed % frameInterval);
-
       try {
-        render();
+        renderRef.current();
       } catch (err) {
         console.warn('Canvas render error suppressed to prevent freeze:', err);
       }
@@ -2754,7 +2764,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
     animId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(animId);
-  }, [render, isPaused, batterySaverEnabled, targetFps]);
+  }, [isPaused, batterySaverEnabled, fxRef]);
 
   // Resize canvas according to container
   useEffect(() => {

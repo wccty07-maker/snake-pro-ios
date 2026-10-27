@@ -40,13 +40,11 @@ class SoundEngine {
   private isResumingAudio: boolean = false;
   private lastResumeAttempt: number = 0;
 
-  // iOS WKWebView Keep-Alive nodes to prevent CoreAudio hardware sleep
-  private keepAliveSource: AudioBufferSourceNode | null = null;
-  private keepAliveGain: GainNode | null = null;
-
+  // iOS audio state
   private isUnlockedState: boolean = false;
   private unlockListenersAttached: boolean = false;
   private unlockCallbacks: Array<() => void> = [];
+  private gestureRemover: (() => void) | null = null;
 
   constructor() {
     try {
@@ -61,69 +59,15 @@ class SoundEngine {
 
     if (typeof window !== 'undefined') {
       this.attachAutoUnlockListeners();
-      // Directly initialize and attempt audio context resume immediately on app boot
       try {
         this.initContext();
-        this.unlockAudio().catch(() => {});
       } catch {
         // ignore
       }
-    }
-  }
-
-  /**
-   * iOS CoreAudio Keep-Alive 機制：
-   * 在 iOS 原生 WKWebView / Capacitor 中，當沒有聲音播放超過數秒時，
-   * iOS 會極為激進地將底層音訊硬體單元關閉省電，導致下一次音效「有時有聲、有時無聲或延遲」。
-   * 透過微弱無聲的循環音訊流 (Gain = 0.00001)，告知 iOS 音訊管線保持活動狀態，
-   * 100% 根除「有時有聲、有時無聲」現象！
-   */
-  private startKeepAlive(ctx: AudioContext) {
-    if (typeof window === 'undefined') return;
-    this.stopKeepAlive();
-
-    try {
-      const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.00001, ctx.currentTime);
-
-      source.connect(gain);
-      gain.connect(ctx.destination);
-      source.start(0);
-
-      this.keepAliveSource = source;
-      this.keepAliveGain = gain;
-    } catch {
-      // ignore
-    }
-  }
-
-  private stopKeepAlive() {
-    if (this.keepAliveSource) {
-      try {
-        this.keepAliveSource.stop();
-        this.keepAliveSource.disconnect();
-      } catch {
-        // ignore
-      }
-      this.keepAliveSource = null;
-    }
-    if (this.keepAliveGain) {
-      try {
-        this.keepAliveGain.disconnect();
-      } catch {
-        // ignore
-      }
-      this.keepAliveGain = null;
     }
   }
 
   private cleanupContext() {
-    this.stopKeepAlive();
     if (this.bgmIntervalId !== null) {
       clearInterval(this.bgmIntervalId);
       this.bgmIntervalId = null;
@@ -167,9 +111,6 @@ class SoundEngine {
       this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
       this.bgmGainNode.connect(this.ctx.destination);
 
-      // 啟動 Keep-Alive 常駐保活
-      this.startKeepAlive(this.ctx);
-
       return this.ctx;
     } catch (err) {
       console.warn('[SoundEngine] Failed to recreate AudioContext:', err);
@@ -183,7 +124,10 @@ class SoundEngine {
       const state = ctx.state as string;
       if (state === 'running') {
         this.isUnlockedState = true;
-        this.startKeepAlive(ctx);
+        if (this.gestureRemover) {
+          this.gestureRemover();
+          this.gestureRemover = null;
+        }
         const cbs = [...this.unlockCallbacks];
         this.unlockCallbacks = [];
         cbs.forEach((cb) => {
@@ -194,8 +138,7 @@ class SoundEngine {
           }
         });
       } else if (state === 'interrupted') {
-        // iOS WebKit 特殊 bug: 一旦進入 interrupted 狀態，呼叫 resume 通常無效，需自動重建 Context
-        console.log('[SoundEngine] iOS AudioContext interrupted, scheduling fresh recovery');
+        console.log('[SoundEngine] iOS AudioContext interrupted, scheduling recovery');
         setTimeout(() => {
           if ((this.ctx?.state as string) === 'interrupted') {
             this.recreateContext();
@@ -209,21 +152,17 @@ class SoundEngine {
     this.isHidden = !isVisible;
 
     if (!isVisible) {
-      // Screen locked or tab hidden
       if (this.isBgmPlaying) {
         this.wasBgmPlayingBeforeHidden = true;
       }
-      // Stop background interval to prevent drift, desync, and CPU waste while locked
       if (this.bgmIntervalId !== null) {
         clearInterval(this.bgmIntervalId);
         this.bgmIntervalId = null;
       }
-      // Gracefully suspend context
       if (this.ctx && this.ctx.state === 'running') {
         this.ctx.suspend().catch(() => {});
       }
     } else {
-      // Screen unlocked or tab returned
       this.resumeAndRestoreAudio().catch(() => {});
     }
   }
@@ -232,8 +171,7 @@ class SoundEngine {
     if (this.unlockListenersAttached || typeof window === 'undefined') return;
     this.unlockListenersAttached = true;
 
-    // Continuously monitor user gestures so any interaction immediately wakes audio
-    const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
+    const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
     const handleGesture = () => {
       unlockHtml5Audio();
 
@@ -241,22 +179,17 @@ class SoundEngine {
         if (this.ctx.state === 'suspended' || (this.ctx.state as any) === 'interrupted') {
           this.ctx.resume().catch(() => {});
         }
-        try {
-          const buffer = this.ctx.createBuffer(1, 1, 22050);
-          const source = this.ctx.createBufferSource();
-          source.buffer = buffer;
-          source.connect(this.ctx.destination);
-          source.start(0);
-        } catch {
-          // ignore
-        }
       } else {
         this.initContext();
       }
 
-      const state = this.ctx ? (this.ctx.state as string) : 'closed';
-      if (state !== 'running' || (this.bgmEnabled && this.wasBgmPlayingBeforeHidden && !this.bgmIntervalId)) {
-        this.resumeAndRestoreAudio().catch(() => {});
+      if (this.ctx && this.ctx.state === 'running') {
+        this.isUnlockedState = true;
+        // Cleanly remove gesture listeners after first unlock - zero overhead during gameplay!
+        if (this.gestureRemover) {
+          this.gestureRemover();
+          this.gestureRemover = null;
+        }
       }
     };
 
@@ -264,7 +197,12 @@ class SoundEngine {
       window.addEventListener(ev, handleGesture, { capture: true, passive: true });
     });
 
-    // Screen lock & visibility lifecycle events
+    this.gestureRemover = () => {
+      gestureEvents.forEach((ev) => {
+        window.removeEventListener(ev, handleGesture, { capture: true });
+      });
+    };
+
     document.addEventListener('visibilitychange', () => {
       this.handleVisibilityOrFocusChange(document.visibilityState === 'visible');
     });
@@ -379,10 +317,6 @@ class SoundEngine {
       this.ctx.resume().catch(() => {});
     }
 
-    // 確保 KeepAlive 保持運行
-    if (!this.keepAliveSource) {
-      this.startKeepAlive(this.ctx);
-    }
 
     // Ensure BGM gain node is bound to current context
     if (!this.bgmGainNode || this.bgmGainNode.context !== this.ctx) {
