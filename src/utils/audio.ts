@@ -283,6 +283,13 @@ class SoundEngine {
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
+        source.onended = () => {
+          try {
+            source.disconnect();
+          } catch {
+            // ignore
+          }
+        };
         source.start(0);
       } catch {
         // ignore
@@ -732,6 +739,7 @@ class SoundEngine {
           wbGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
           wbOsc.connect(wbGain);
           wbGain.connect(this.bgmGainNode);
+          this.autoCleanup(wbOsc, wbGain);
           wbOsc.start(now);
           wbOsc.stop(now + 0.04);
         } else if (this.currentStep % 2 === 1) {
@@ -1158,6 +1166,7 @@ class SoundEngine {
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(ctx.destination);
+      this.autoCleanup(osc2, osc1, gain);
 
       osc1.start(now);
       osc1.stop(now + 0.08);
@@ -1394,6 +1403,7 @@ class SoundEngine {
       sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
       shimmer.connect(sGain);
       sGain.connect(ctx.destination);
+      this.autoCleanup(shimmer, sGain);
       shimmer.start(now);
       shimmer.stop(now + 0.36);
     } catch {

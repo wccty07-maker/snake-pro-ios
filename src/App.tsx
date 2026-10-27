@@ -740,14 +740,17 @@ export default function App() {
     });
   }, [todayStr]);
 
-  // Live timer tick for heart refills
+  // Live timer tick for heart refills (only ticks when player has depleted hearts to save CPU/battery)
   const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
+    const maxH = profile.maxHearts || 5;
+    if (profile.hearts >= maxH) return;
+
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [profile.hearts, profile.maxHearts]);
 
   // Compute hearts state (15 min interval countdown, max 5 hearts, no refill if >= 5)
   const heartsState = useMemo(() => {

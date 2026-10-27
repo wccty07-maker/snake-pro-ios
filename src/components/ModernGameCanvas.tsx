@@ -495,7 +495,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
         // Glow aura
         ctx.shadowColor = isAlpha ? 'rgba(56, 189, 248, 0.95)' : 'rgba(251, 146, 60, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
 
         // Outer pulsing ring
         const pulseR = portalRadius * (1 + Math.sin(now / 200 + pIdx) * 0.1);
@@ -572,7 +572,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
         ctx.save();
         ctx.shadowColor = gColor;
-        ctx.shadowBlur = isMatch ? 8 : 16;
+        ctx.shadowBlur = 0;
         ctx.fillStyle = isMatch ? `${gColor}35` : `${gColor}75`;
         ctx.fillRect(gx + 1, gy + 1, cellW - 2, cellH - 2);
 
@@ -709,7 +709,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
           ctx.lineWidth = 2.2;
           if (enableGlow) {
             ctx.shadowColor = 'rgba(244, 63, 94, 0.7)';
-            ctx.shadowBlur = 9;
+            ctx.shadowBlur = 0;
           }
           ctx.beginPath();
           ctx.roundRect(ox + 2, oy + 2, cellW - 4, cellH - 4, 6);
@@ -801,7 +801,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       if (food.type === 'NORMAL') {
         // Red Apple (鮮甜紅蘋果 🍎，完美對應關卡目標紅蘋果圖標)
         ctx.shadowColor = 'rgba(239, 68, 68, 0.95)';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 0;
 
         // Rich red apple radial gradient with glossy 3D shine
         const appleGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.15, 0, 0, radius);
@@ -855,7 +855,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'GOLDEN') {
         // Golden Apple (璀璨金蘋果，完美統一全場蘋果體系，絕非星星)
         ctx.shadowColor = 'rgba(251, 191, 36, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
 
         // Rich golden apple radial gradient with glossy 3D shine
         const goldAppleGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.15, 0, 0, radius);
@@ -917,7 +917,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'SHIELD') {
         // Monster Plasma Shield Orb (怪獸守護力場盾牌，嚴格只顯示盾牌，絕不顯示棒棒糖 🍭)
         ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 0;
 
         const shieldGrad = ctx.createRadialGradient(0, 0, radius * 0.2, 0, 0, radius);
         shieldGrad.addColorStop(0, '#e0f2fe');
@@ -974,7 +974,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'SLOW') {
         // Grape Gummy Drop (紫葡萄晶凍 🍇 - 純向量立體葡萄串，絕不重影走位)
         ctx.shadowColor = 'rgba(192, 132, 252, 0.95)';
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 0;
 
         // Top stem & vine leaf
         ctx.strokeStyle = '#78350f';
@@ -1019,7 +1019,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'COIN') {
         // Golden Chocolate Coin (金幣巧克力)
         ctx.shadowColor = 'rgba(245, 158, 11, 0.9)';
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 0;
 
         ctx.fillStyle = '#fde047';
         ctx.beginPath();
@@ -1046,7 +1046,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'BLUE') {
         // Blue Raspberry Sugar Crystal (藍莓冰晶糖)
         ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 0;
 
         const blueGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.2, 0, 0, radius);
         blueGrad.addColorStop(0, '#bae6fd');
@@ -1073,7 +1073,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'GREEN') {
         // Crisp Mint Apple Gummy (青蘋果薄荷糖)
         ctx.shadowColor = 'rgba(74, 222, 128, 0.95)';
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 0;
 
         const greenGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.2, 0, 0, radius);
         greenGrad.addColorStop(0, '#bbf7d0');
@@ -1100,7 +1100,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'CHILI') {
         // Blazing Fire Chili (烈焰辣椒 🌶️ - 純向量辣椒造型)
         ctx.shadowColor = 'rgba(249, 115, 22, 0.95)';
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 0;
 
         // Chili curved body
         const chiliGrad = ctx.createLinearGradient(-radius * 0.5, -radius * 0.7, radius * 0.4, radius * 0.7);
@@ -1142,7 +1142,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'MAGNET') {
         // Deep Sea Magnetic Pearl / Horseshoe (深海磁石 🧲 - 純向量經典磁石)
         ctx.shadowColor = 'rgba(6, 182, 212, 0.95)';
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 0;
 
         const mR = radius * 0.88;
         const mW = radius * 0.32;
@@ -1200,7 +1200,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'DRAGON_EGG') {
         // Ancient Dragon Egg (遠古巨龍蛋 🥚 - 純向量精緻龍紋寶蛋)
         ctx.shadowColor = 'rgba(244, 63, 94, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
 
         const eW = radius * 0.85;
         const eH = radius * 1.1;
@@ -1241,7 +1241,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'RAINBOW') {
         // Rainbow Lollipop (甜蜜彩虹棒棒糖 🍭 - 純向量手繪立體棒棒糖，唯一整體，絕不分裂成兩舊)
         ctx.shadowColor = 'rgba(236, 72, 153, 0.95)';
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 0;
 
         const candyR = radius * 0.75;
         const cx = -radius * 0.12;
@@ -1318,7 +1318,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'BOMB') {
         // 1. Timed Bomb (限時拆彈 💣 - 倒數定時炸彈)
         ctx.shadowColor = 'rgba(239, 68, 68, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
 
         const bR = radius * 0.88;
         const bombGrad = ctx.createRadialGradient(-bR * 0.35, -bR * 0.35, bR * 0.1, 0, 1, bR);
@@ -1366,7 +1366,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'GHOST') {
         // 2. Ghost Mode Orb (幽靈穿透 👻 - 飄逸靈魂法球)
         ctx.shadowColor = 'rgba(192, 132, 252, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
 
         const gR = radius * 0.9;
         const ghostGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, gR);
@@ -1387,7 +1387,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'REVERSE') {
         // 7. Reverse Gear Orb (倒後檔 ⏪ - 雙向霓虹轉向器)
         ctx.shadowColor = 'rgba(99, 102, 241, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
 
         const revR = radius * 0.88;
         const revGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, revR);
@@ -1409,7 +1409,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'GLOW_BERRY') {
         // 3. Glow Berry (發光藍莓 🫐 - 夜間迷霧驅散光源)
         ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-        ctx.shadowBlur = 22;
+        ctx.shadowBlur = 0;
 
         const bR = radius * 0.9;
         const bGrad = ctx.createRadialGradient(-bR * 0.35, -bR * 0.35, bR * 0.1, 0, 0, bR);
@@ -1431,7 +1431,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'KEY') {
         // Key (黃金鑰匙 🗝️)
         ctx.shadowColor = 'rgba(234, 179, 8, 0.95)';
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 0;
         ctx.font = `${Math.floor(radius * 1.4)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1439,7 +1439,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       } else if (food.type === 'LIGHTNING') {
         // Cyber Overclock Core (電磁超頻核心 ⚡ - 高壓電磁能量水晶)
         ctx.shadowColor = 'rgba(217, 70, 239, 0.95)';
-        ctx.shadowBlur = 22;
+        ctx.shadowBlur = 0;
 
         const lR = radius * 0.9;
         const lGrad = ctx.createRadialGradient(-lR * 0.35, -lR * 0.35, lR * 0.1, 0, 0, lR);
@@ -1472,41 +1472,31 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     // 5. Draw Snake Body & Glow (Cute 3D Candy Gummy Beads)
     if (snake.length > 0) {
       ctx.save();
-      // Compute snake body aura glow (capped for mobile 60 FPS performance)
+      // Keep snake body rendering 100% hardware-accelerated without software Gaussian blur passes
       let snakeGlowColor = skin.glowColor;
-      let snakeGlowBlur = enableGlow ? 6 : 0;
+      const snakeGlowBlur = 0; // Disabled per-segment shadowBlur to guarantee zero frame drops and minimal battery drain!
       if (isLightningActive) {
         snakeGlowColor = 'rgba(217, 70, 239, 0.98)';
-        snakeGlowBlur = enableGlow ? 10 : 0;
       } else if (isRainbowActive) {
         const glowHue = Math.floor((Date.now() / 15) % 360);
         snakeGlowColor = `hsl(${glowHue}, 100%, 65%)`;
-        snakeGlowBlur = enableGlow ? 8 : 0;
       } else if (isGhostActive) {
         ctx.globalAlpha = 0.65;
         snakeGlowColor = 'rgba(192, 132, 252, 0.95)';
-        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (isKeyAuraActive) {
         snakeGlowColor = 'rgba(234, 179, 8, 0.95)';
-        snakeGlowBlur = enableGlow ? 8 : 0;
       } else if (isFireActive) {
         snakeGlowColor = 'rgba(249, 115, 22, 0.95)';
-        snakeGlowBlur = enableGlow ? 8 : 0;
       } else if (isMagnetActive) {
         snakeGlowColor = 'rgba(6, 182, 212, 0.95)';
-        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (isShieldActive) {
         snakeGlowColor = 'rgba(56, 189, 248, 0.9)';
-        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (snakeColor === 'RED') {
         snakeGlowColor = 'rgba(239, 68, 68, 0.95)';
-        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (snakeColor === 'BLUE') {
         snakeGlowColor = 'rgba(56, 189, 248, 0.95)';
-        snakeGlowBlur = enableGlow ? 6 : 0;
       } else if (snakeColor === 'GREEN') {
         snakeGlowColor = 'rgba(34, 197, 94, 0.95)';
-        snakeGlowBlur = enableGlow ? 6 : 0;
       }
       ctx.shadowBlur = 0;
 
@@ -1554,7 +1544,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
         if (snakeGlowBlur > 0) {
           ctx.shadowColor = snakeGlowColor;
-          ctx.shadowBlur = snakeGlowBlur;
+          ctx.shadowBlur = 0;
         } else {
           ctx.shadowBlur = 0;
         }
@@ -1689,7 +1679,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
       if (snakeGlowBlur > 0) {
         ctx.shadowColor = snakeGlowColor;
-        ctx.shadowBlur = snakeGlowBlur;
+        ctx.shadowBlur = 0;
       } else {
         ctx.shadowBlur = 0;
       }
@@ -1709,7 +1699,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.strokeStyle = elemColor;
         ctx.lineWidth = 2.2 + pulse * 1.5;
         ctx.shadowColor = elemColor;
-        ctx.shadowBlur = 12 + pulse * 8;
+        ctx.shadowBlur = 0;
         ctx.beginPath();
         ctx.arc(headX, headY, headRadius + 2.5 + pulse * 2, 0, Math.PI * 2);
         ctx.stroke();
@@ -1932,7 +1922,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       if (!rs.body || rs.body.length === 0) return;
 
       ctx.save();
-      const rovingGlowBlur = enableGlow ? 6 : 0;
+      const rovingGlowBlur = 0;
       ctx.shadowBlur = 0;
 
       // Draw Body Segments (tail to neck)
@@ -1959,7 +1949,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
         if (rovingGlowBlur > 0) {
           ctx.shadowColor = rs.glowColor;
-          ctx.shadowBlur = rovingGlowBlur;
+          ctx.shadowBlur = 0;
         } else {
           ctx.shadowBlur = 0;
         }
@@ -2027,7 +2017,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
       if (rovingGlowBlur > 0) {
         ctx.shadowColor = rs.glowColor;
-        ctx.shadowBlur = rovingGlowBlur;
+        ctx.shadowBlur = 0;
       } else {
         ctx.shadowBlur = 0;
       }
@@ -2099,7 +2089,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 1.8;
         ctx.shadowColor = '#d946ef';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 0;
         const arcPhase = (Date.now() / 80) % (Math.PI * 2);
         ctx.beginPath();
         for (let a = 0; a < 6; a++) {
@@ -2128,18 +2118,21 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       ctx.restore();
     });
 
-    // 6. Draw Particles (reads from fxRef with fallback to props)
+    // 6. Draw Particles (batch rendered for peak GPU/CPU efficiency)
     const activeParticles = fxRef?.current ? fxRef.current.particles : (particles || []);
-    activeParticles.forEach((p) => {
+    if (activeParticles.length > 0) {
       ctx.save();
-      ctx.globalAlpha = p.alpha;
-      ctx.fillStyle = p.color;
       ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.arc(gridX + p.x * cellW + cellW / 2, gridY + p.y * cellH + cellH / 2, p.size, 0, Math.PI * 2);
-      ctx.fill();
+      for (let i = 0; i < activeParticles.length; i++) {
+        const p = activeParticles[i];
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(gridX + p.x * cellW + cellW / 2, gridY + p.y * cellH + cellH / 2, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
-    });
+    }
 
     // Helper to draw a crisp, glossy 3D miniature blue apple with stem and leaf
     const drawMiniBlueApple = (
@@ -2474,7 +2467,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       ctx.globalAlpha = ft.alpha;
       ctx.fillStyle = ft.color;
       ctx.shadowColor = ft.color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 0;
       ctx.font = '900 15px "Outfit", "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
       ctx.textBaseline = 'middle';
       const textX = gridX + ft.x * cellW + cellW / 2;
@@ -2644,7 +2637,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
             ctx.arc(ox, oy, 2.5, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(244, 63, 94, 0.45)';
             ctx.shadowColor = 'rgba(244, 63, 94, 0.8)';
-            ctx.shadowBlur = 6;
+            ctx.shadowBlur = 0;
             ctx.fill();
             ctx.restore();
           }
@@ -2684,11 +2677,17 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   const renderRef = useRef(render);
   renderRef.current = render;
 
-  // Canvas size and animation loop with native hardware VSync & battery-saver throttling
+  // Canvas size and animation loop with smooth 60 FPS pacing & battery-saver throttling
   useEffect(() => {
     let animId: number;
     let lastFrameTime = performance.now();
     let pauseTickCount = 0;
+
+    // Smooth frame rate limiter:
+    // - Battery saver mode: 30 FPS (~33.3ms)
+    // - Standard mode: Smooth 60 FPS (~16.6ms), eliminating 120Hz runaway rendering on ProMotion screens
+    const effectiveFps = batterySaverEnabled ? 30 : (targetFps || 60);
+    const minFrameInterval = 1000 / effectiveFps - 1.2;
 
     const update = (now: number) => {
       animId = requestAnimationFrame(update);
@@ -2704,16 +2703,13 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         if (pauseTickCount % 30 !== 0) {
           return;
         }
-      }
-
-      // 3. Throttle only when Battery Saver mode is active (locks to ~30 FPS for battery saving)
-      // In standard mode, render directly on native hardware VSync with zero dropped frames or micro-stutters!
-      if (batterySaverEnabled) {
+      } else {
+        // 3. Frame rate pacing: drop redundant frames on 120Hz ProMotion screens
         const elapsed = now - lastFrameTime;
-        if (elapsed < 31) {
+        if (elapsed < minFrameInterval) {
           return;
         }
-        lastFrameTime = now;
+        lastFrameTime = now - (elapsed % minFrameInterval);
       }
 
       // 4. Update particle & floating text physics directly on fxRef with zero React re-renders
@@ -2764,7 +2760,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
 
     animId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(animId);
-  }, [isPaused, batterySaverEnabled, fxRef]);
+  }, [isPaused, batterySaverEnabled, targetFps, fxRef]);
 
   // Resize canvas according to container
   useEffect(() => {
