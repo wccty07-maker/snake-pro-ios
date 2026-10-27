@@ -124,10 +124,6 @@ class SoundEngine {
       const state = ctx.state as string;
       if (state === 'running') {
         this.isUnlockedState = true;
-        if (this.gestureRemover) {
-          this.gestureRemover();
-          this.gestureRemover = null;
-        }
         const cbs = [...this.unlockCallbacks];
         this.unlockCallbacks = [];
         cbs.forEach((cb) => {
@@ -137,13 +133,17 @@ class SoundEngine {
             // ignore
           }
         });
-      } else if (state === 'interrupted') {
-        console.log('[SoundEngine] iOS AudioContext interrupted, scheduling recovery');
-        setTimeout(() => {
-          if ((this.ctx?.state as string) === 'interrupted') {
-            this.recreateContext();
-          }
-        }, 300);
+      } else if (state === 'interrupted' || state === 'suspended') {
+        console.log('[SoundEngine] iOS AudioContext state changed to', state, '- auto resuming');
+        if (!this.isHidden) {
+          setTimeout(() => {
+            if ((this.ctx?.state as string) === 'interrupted') {
+              this.recreateContext();
+            } else if (this.ctx?.state === 'suspended') {
+              this.ctx.resume().catch(() => {});
+            }
+          }, 150);
+        }
       }
     };
   }
@@ -163,7 +163,12 @@ class SoundEngine {
         this.ctx.suspend().catch(() => {});
       }
     } else {
+      // Immediate attempt when returning to app (e.g. from Privacy / Terms web page)
       this.resumeAndRestoreAudio().catch(() => {});
+      // Staggered attempts to catch iOS CoreAudio hardware release
+      setTimeout(() => this.resumeAndRestoreAudio().catch(() => {}), 150);
+      setTimeout(() => this.resumeAndRestoreAudio().catch(() => {}), 450);
+      setTimeout(() => this.resumeAndRestoreAudio().catch(() => {}), 900);
     }
   }
 
@@ -171,37 +176,31 @@ class SoundEngine {
     if (this.unlockListenersAttached || typeof window === 'undefined') return;
     this.unlockListenersAttached = true;
 
-    const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
+    // Keep gesture events PERMANENTLY active so returning from Safari or external browser
+    // will instantly re-wake audio on the very first touch, even if iOS suspended it.
+    const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
     const handleGesture = () => {
       unlockHtml5Audio();
 
       if (this.ctx) {
-        if (this.ctx.state === 'suspended' || (this.ctx.state as any) === 'interrupted') {
+        const s = this.ctx.state as string;
+        if (s === 'suspended' || s === 'interrupted') {
           this.ctx.resume().catch(() => {});
         }
       } else {
         this.initContext();
       }
 
-      if (this.ctx && this.ctx.state === 'running') {
+      if (!this.ctx || this.ctx.state !== 'running') {
+        this.resumeAndRestoreAudio().catch(() => {});
+      } else {
         this.isUnlockedState = true;
-        // Cleanly remove gesture listeners after first unlock - zero overhead during gameplay!
-        if (this.gestureRemover) {
-          this.gestureRemover();
-          this.gestureRemover = null;
-        }
       }
     };
 
     gestureEvents.forEach((ev) => {
       window.addEventListener(ev, handleGesture, { capture: true, passive: true });
     });
-
-    this.gestureRemover = () => {
-      gestureEvents.forEach((ev) => {
-        window.removeEventListener(ev, handleGesture, { capture: true });
-      });
-    };
 
     document.addEventListener('visibilitychange', () => {
       this.handleVisibilityOrFocusChange(document.visibilityState === 'visible');
@@ -216,6 +215,21 @@ class SoundEngine {
     });
 
     window.addEventListener('focus', () => {
+      this.handleVisibilityOrFocusChange(true);
+    });
+
+    // Native Capacitor / Cordova lifecycle hooks for app resume
+    const win = window as any;
+    if (win.Capacitor?.Plugins?.App) {
+      try {
+        win.Capacitor.Plugins.App.addListener('appStateChange', (state: { isActive: boolean }) => {
+          this.handleVisibilityOrFocusChange(state.isActive);
+        });
+      } catch {
+        // ignore
+      }
+    }
+    document.addEventListener('resume', () => {
       this.handleVisibilityOrFocusChange(true);
     });
   }
@@ -242,20 +256,22 @@ class SoundEngine {
       return !!this.ctx && this.ctx.state === 'running';
     }
     const nowTime = Date.now();
-    if (nowTime - this.lastResumeAttempt < 200) {
+    if (nowTime - this.lastResumeAttempt < 100) {
       return !!this.ctx && this.ctx.state === 'running';
     }
     this.lastResumeAttempt = nowTime;
     this.isResumingAudio = true;
 
     try {
+      unlockHtml5Audio();
+
       let ctx = this.ctx;
-      if (!ctx || ctx.state === 'closed') {
+      if (!ctx || ctx.state === 'closed' || (ctx.state as string) === 'interrupted') {
         ctx = this.recreateContext();
       }
       if (!ctx) return false;
 
-      // iOS Safari and Android Chrome handle both 'suspended' and 'interrupted' (Safari lock-screen state)
+      // iOS Safari and Android Chrome handle both 'suspended' and 'interrupted'
       const state = ctx.state as string;
       if (state === 'suspended' || state === 'interrupted') {
         await ctx.resume().catch(() => {});
@@ -285,7 +301,7 @@ class SoundEngine {
         });
       }
 
-      // Restore background music if it was running before screen lock
+      // Restore background music if it was running before screen lock or app switch
       if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || this.isBgmPlaying)) {
         if (!this.bgmIntervalId) {
           this.isBgmPlaying = false; // allow startBgm to launch cleanly
@@ -300,6 +316,8 @@ class SoundEngine {
       this.isResumingAudio = false;
     }
   }
+
+
 
   public async unlockAudio(): Promise<boolean> {
     return this.resumeAndRestoreAudio();

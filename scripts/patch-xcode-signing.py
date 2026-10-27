@@ -6,6 +6,7 @@ import sys
 pbxproj_path = sys.argv[1] if len(sys.argv) > 1 else 'ios/App/App.xcodeproj/project.pbxproj'
 team_id = sys.argv[2] if len(sys.argv) > 2 else os.environ.get('APPLE_TEAM_ID', 'N2S5289QDM')
 profile_name = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('PROVISIONING_PROFILE_NAME', '')
+build_number = sys.argv[4] if len(sys.argv) > 4 else os.environ.get('BUILD_NUMBER', '')
 
 if not os.path.exists(pbxproj_path):
     print(f"Error: {pbxproj_path} not found")
@@ -14,7 +15,7 @@ if not os.path.exists(pbxproj_path):
 with open(pbxproj_path, 'r', encoding='utf-8') as f:
     content = f.read()
 
-print(f"Patching {pbxproj_path} with Development Team: {team_id}, Profile: {profile_name or 'Auto/None'}")
+print(f"Patching {pbxproj_path} with Development Team: {team_id}, Profile: {profile_name or 'Auto/None'}, Build: {build_number or 'Unchanged'}")
 
 # 1. Patch TargetAttributes in PBXProject to set DevelopmentTeam and ProvisioningStyle = Manual
 def patch_target_attributes(match):
@@ -64,6 +65,13 @@ def patch_build_settings(match):
             settings = re.sub(r'PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]+;', f'PROVISIONING_PROFILE_SPECIFIER = "{profile_name}";', settings)
         else:
             settings = settings.rstrip() + f'\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile_name}";\n\t\t\t'
+
+    # If build_number is specified, inject CURRENT_PROJECT_VERSION
+    if build_number:
+        if 'CURRENT_PROJECT_VERSION' in settings:
+            settings = re.sub(r'CURRENT_PROJECT_VERSION\s*=\s*[^;]+;', f'CURRENT_PROJECT_VERSION = {build_number};', settings)
+        else:
+            settings = settings.rstrip() + f'\n\t\t\t\tCURRENT_PROJECT_VERSION = {build_number};\n\t\t\t'
 
     return f'buildSettings = {{{settings}}};'
 

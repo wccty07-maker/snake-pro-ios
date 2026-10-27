@@ -289,18 +289,8 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
       {/* Sponsor Video Ad Overlay (5秒廣告倒數，任何環境 100% 保證可彈出並成功獲得 +1 ❤️) */}
       {adWatching && (
         <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 animate-fade-in text-center select-none">
-          {/* Header */}
-          <div className="w-full max-w-md flex items-center justify-between pt-safe">
-            <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-teal-300 font-bold border border-teal-500/30 flex items-center gap-1.5 shadow-sm">
-              <Film className="w-3.5 h-3.5 text-teal-400" />
-              {language === 'en' ? 'Sponsor Video' : language === 'ja' ? 'スポンサー動画' : language === 'zh-CN' ? '赞助商广告' : '贊助商影片廣告'}
-            </span>
-            <div className="text-xs font-mono font-black text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-400/40 shadow-inner">
-              {adCountdown > 0
-                ? (language === 'en' ? `Reward in ${adCountdown}s` : language === 'ja' ? `報酬まで ${adCountdown}秒` : language === 'zh-CN' ? `倒计时 ${adCountdown} 秒` : `獎勵倒數 ${adCountdown} 秒`)
-                : (language === 'en' ? 'Complete!' : '已完成！')}
-            </div>
-          </div>
+          {/* Header Spacer (circled elements removed per request) */}
+          <div className="w-full max-w-md pt-safe" />
 
           {/* Central Animated Content */}
           <div className="flex flex-col items-center gap-4 my-auto max-w-xs">
@@ -341,16 +331,8 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
             </div>
           </div>
 
-          {/* Footer info */}
-          <div className="text-[11px] text-slate-400 pb-safe">
-            {language === 'en'
-              ? 'Free daily reward: +1 Heart ❤️'
-              : language === 'ja'
-              ? '無料デイリーリワード：ハート +1個 ❤️'
-              : language === 'zh-CN'
-              ? '每日免费奖励：+1 颗爱心 ❤️'
-              : '每日免費獎勵：+1 顆愛心 ❤️'}
-          </div>
+          {/* Footer Spacer (circled elements removed per request) */}
+          <div className="pb-safe" />
         </div>
       )}
 

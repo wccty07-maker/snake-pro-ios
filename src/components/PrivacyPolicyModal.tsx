@@ -367,6 +367,18 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
               href={publicUrl || 'https://jolly-sundae-9ed76d.netlify.app'}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                soundEngine.playClick();
+                const handleReturn = () => {
+                  window.removeEventListener('focus', handleReturn);
+                  document.removeEventListener('visibilitychange', handleReturn);
+                  soundEngine.resumeAndRestoreAudio();
+                  setTimeout(() => soundEngine.resumeAndRestoreAudio(), 200);
+                  setTimeout(() => soundEngine.resumeAndRestoreAudio(), 600);
+                };
+                window.addEventListener('focus', handleReturn, { once: true });
+                document.addEventListener('visibilitychange', handleReturn, { once: true });
+              }}
               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-750 transition-all cursor-pointer flex items-center justify-center"
               title={getOpenUrlText(activeLang)}
             >

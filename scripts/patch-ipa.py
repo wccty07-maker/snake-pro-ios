@@ -53,7 +53,16 @@ def patch_ipa(ipa_path, keychain_path=None):
     if "BuildMachineOSBuild" in plist_data:
         plist_data["BuildMachineOSBuild"] = "26A100"
 
-    print(f"[IPA-Patch] Patched values -> DTSDKName: {plist_data['DTSDKName']}, DTXcode: {plist_data['DTXcode']}, DTPlatformVersion: {plist_data['DTPlatformVersion']}")
+    # Apple requires CFBundleVersion to be strictly higher than previously uploaded (which was 3)
+    build_num = os.environ.get("BUILD_NUMBER")
+    if build_num:
+        plist_data["CFBundleVersion"] = str(build_num)
+    else:
+        curr_b = str(plist_data.get("CFBundleVersion", "1"))
+        if curr_b.isdigit() and int(curr_b) <= 3:
+            plist_data["CFBundleVersion"] = "4"
+
+    print(f"[IPA-Patch] Patched values -> DTSDKName: {plist_data['DTSDKName']}, DTXcode: {plist_data['DTXcode']}, CFBundleVersion: {plist_data.get('CFBundleVersion')}")
 
     with open(plist_path, "wb") as fp:
         plistlib.dump(plist_data, fp)
