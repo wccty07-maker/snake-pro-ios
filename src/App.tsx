@@ -1253,6 +1253,7 @@ export default function App() {
     pauseGame,
     changeDirection,
     triggerReverseGear,
+    tickInterpolationRef,
   } = useSnakeEngine({
     mode: selectedMode,
     currentLevel: selectedMode === 'LEVELS' ? currentLevel : undefined,
@@ -2239,7 +2240,6 @@ export default function App() {
               score={score}
               coinsEarned={coinsEarned}
               language={profile.language || 'zh-HK'}
-              controlType={profile.controlType || 'DPAD'}
               combo={combo}
               isGhostActive={isGhostActive}
               snakeColor={snakeColor}
@@ -2252,10 +2252,8 @@ export default function App() {
               batterySaverEnabled={profile.batterySaverEnabled ?? false}
               targetFps={profile.targetFps ?? 60}
               glowEffectsEnabled={profile.glowEffectsEnabled ?? true}
+              tickInterpolationRef={tickInterpolationRef}
               onDirectionChange={changeDirection}
-              onToggleControlType={(newType) => {
-                setProfile((prev) => ({ ...prev, controlType: newType }));
-              }}
               onTogglePause={pauseGame}
               onRestart={handleInGameRestart}
               onQuit={handleInGameQuit}

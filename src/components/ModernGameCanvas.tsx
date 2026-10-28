@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Point, Direction, FoodItem, Particle, FloatingText, SnakeSkin, ArenaTheme, LevelMission, RovingSnake, ControlType } from '../types';
-import { GRID_COLS, GRID_ROWS } from '../hooks/useSnakeEngine';
-import { Pause, Play, RotateCcw, Home, Target, ShieldAlert, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Point, Direction, FoodItem, Particle, FloatingText, SnakeSkin, ArenaTheme, LevelMission, RovingSnake } from '../types';
+import { GRID_COLS, GRID_ROWS, TickInterpolation } from '../hooks/useSnakeEngine';
+import { Pause, Play, RotateCcw, Home, Target, ShieldAlert } from 'lucide-react';
 import { soundEngine } from '../utils/audio';
 import { SupportedLanguage, getTranslation } from '../utils/i18n';
 import { getLocalizedLevel } from '../utils/levelsData';
@@ -16,6 +16,7 @@ interface ModernGameCanvasProps {
   particles?: Particle[];
   floatingTexts?: FloatingText[];
   fxRef?: React.MutableRefObject<{ particles: Particle[]; floatingTexts: FloatingText[] }>;
+  tickInterpolationRef?: React.MutableRefObject<TickInterpolation>;
   skin: SnakeSkin;
   arena: ArenaTheme;
   showGrid: boolean;
@@ -42,7 +43,6 @@ interface ModernGameCanvasProps {
   coinsEarned?: number;
   currentMission?: LevelMission;
   language?: SupportedLanguage;
-  controlType?: ControlType;
   combo?: number;
   isGhostActive?: boolean;
   snakeColor?: 'NORMAL' | 'RED' | 'BLUE' | 'GREEN';
@@ -55,7 +55,6 @@ interface ModernGameCanvasProps {
   targetFps?: 30 | 60;
   glowEffectsEnabled?: boolean;
   onDirectionChange: (dir: Direction) => void;
-  onToggleControlType?: (type: ControlType) => void;
   onTogglePause?: () => void;
   onRestart?: () => void;
   onQuit?: () => void;
@@ -70,6 +69,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   particles = [],
   floatingTexts = [],
   fxRef,
+  tickInterpolationRef,
   skin,
   arena,
   showGrid,
@@ -87,7 +87,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   coinsEarned = 0,
   currentMission,
   language = 'zh-HK',
-  controlType = 'DPAD',
   combo = 0,
   isGhostActive = false,
   snakeColor = 'NORMAL',
@@ -100,7 +99,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   targetFps = 60,
   glowEffectsEnabled = true,
   onDirectionChange,
-  onToggleControlType,
   onTogglePause,
   onRestart,
   onQuit,
@@ -158,113 +156,128 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     }
   }, [onTogglePause, isPaused]);
 
-  // Handle Touch Start (Zero React re-render allocation, instant response)
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    const touch = e.touches[0];
+  const onDirectionChangeRef = useRef(onDirectionChange);
+  useEffect(() => {
+    onDirectionChangeRef.current = onDirectionChange;
+  }, [onDirectionChange]);
 
-    touchMovedRef.current = false;
-    swipeTriggeredDirRef.current = null;
-    touchStartPosRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-    };
-    lastTriggerPosRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-    };
-    touchStartRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      time: Date.now(),
-    };
-  };
+  // Direct native non-passive touch listeners (Eliminates iOS Safari 100ms gesture disambiguation delay!)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-  // Handle Touch Move (Rock-solid swipe gesture: fires once per stroke, supports clean 90-degree corner chaining)
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStartPosRef.current || e.touches.length !== 1) return;
-    const touch = e.touches[0];
+    const onNativeTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
 
-    // Total displacement from touchstart
-    const totalDx = touch.clientX - touchStartPosRef.current.x;
-    const totalDy = touch.clientY - touchStartPosRef.current.y;
-    const totalDist = Math.hypot(totalDx, totalDy);
-
-    if (totalDist > 8) {
-      touchMovedRef.current = true;
-    }
-
-    // 1. Initial turn recognition for this stroke (low 10px threshold for instant response)
-    if (!swipeTriggeredDirRef.current) {
-      if (totalDist >= 10) {
-        let detectedDir: Direction;
-        if (Math.abs(totalDx) >= Math.abs(totalDy)) {
-          detectedDir = totalDx > 0 ? 'RIGHT' : 'LEFT';
-        } else {
-          detectedDir = totalDy > 0 ? 'DOWN' : 'UP';
-        }
-
-        swipeTriggeredDirRef.current = detectedDir;
-        lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
-        onDirectionChange(detectedDir);
-      }
-    } else if (lastTriggerPosRef.current) {
-      // 2. Chained orthogonal turn without lifting thumb (e.g. sharp corner flick)
-      const curDx = touch.clientX - lastTriggerPosRef.current.x;
-      const curDy = touch.clientY - lastTriggerPosRef.current.y;
-      const prevDir = swipeTriggeredDirRef.current;
-      const isPrevHorizontal = prevDir === 'LEFT' || prevDir === 'RIGHT';
-
-      // If previous was horizontal, look for decisive vertical motion (> 22px)
-      if (isPrevHorizontal && Math.abs(curDy) >= 22 && Math.abs(curDy) > Math.abs(curDx) * 1.4) {
-        const nextDir: Direction = curDy > 0 ? 'DOWN' : 'UP';
-        swipeTriggeredDirRef.current = nextDir;
-        lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
-        onDirectionChange(nextDir);
-      } else if (!isPrevHorizontal && Math.abs(curDx) >= 22 && Math.abs(curDx) > Math.abs(curDy) * 1.4) {
-        // If previous was vertical, look for decisive horizontal motion (> 22px)
-        const nextDir: Direction = curDx > 0 ? 'RIGHT' : 'LEFT';
-        swipeTriggeredDirRef.current = nextDir;
-        lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
-        onDirectionChange(nextDir);
-      }
-    }
-  };
-
-  // Handle Touch End (detect Double Tap)
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const endTouch = e.changedTouches[0];
-    touchStartRef.current = null;
-    swipeTriggeredDirRef.current = null;
-    lastTriggerPosRef.current = null;
-
-    // If finger was stationary (not a swipe drag), test for double tap!
-    if (!touchMovedRef.current && endTouch && touchStartPosRef.current) {
-      const now = Date.now();
-      const lastTap = lastTapRef.current;
-
-      if (lastTap && now - lastTap.time < 350) {
-        const dist = Math.hypot(
-          endTouch.clientX - lastTap.x,
-          endTouch.clientY - lastTap.y
-        );
-
-        if (dist < 50) {
-          // Double tap detected!
-          lastTapRef.current = null;
-          triggerDoubleTapAction(endTouch.clientX, endTouch.clientY);
-          return;
-        }
-      }
-
-      // Record first tap
-      lastTapRef.current = {
-        time: now,
-        x: endTouch.clientX,
-        y: endTouch.clientY,
+      touchMovedRef.current = false;
+      swipeTriggeredDirRef.current = null;
+      touchStartPosRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
       };
-    }
-  };
+      lastTriggerPosRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+      touchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now(),
+      };
+    };
+
+    const onNativeTouchMove = (e: TouchEvent) => {
+      if (!touchStartPosRef.current || e.touches.length !== 1) return;
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+
+      const totalDx = touch.clientX - touchStartPosRef.current.x;
+      const totalDy = touch.clientY - touchStartPosRef.current.y;
+      const totalDist = Math.hypot(totalDx, totalDy);
+
+      if (totalDist > 8) {
+        touchMovedRef.current = true;
+      }
+
+      // 1. Initial turn recognition (ultra-fast 9px threshold with 0ms OS delay)
+      if (!swipeTriggeredDirRef.current) {
+        if (totalDist >= 9) {
+          let detectedDir: Direction;
+          if (Math.abs(totalDx) >= Math.abs(totalDy)) {
+            detectedDir = totalDx > 0 ? 'RIGHT' : 'LEFT';
+          } else {
+            detectedDir = totalDy > 0 ? 'DOWN' : 'UP';
+          }
+
+          swipeTriggeredDirRef.current = detectedDir;
+          lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
+          onDirectionChangeRef.current(detectedDir);
+        }
+      } else if (lastTriggerPosRef.current) {
+        // 2. Chained orthogonal corner flick without lifting finger
+        const curDx = touch.clientX - lastTriggerPosRef.current.x;
+        const curDy = touch.clientY - lastTriggerPosRef.current.y;
+        const prevDir = swipeTriggeredDirRef.current;
+        const isPrevHorizontal = prevDir === 'LEFT' || prevDir === 'RIGHT';
+
+        if (isPrevHorizontal && Math.abs(curDy) >= 20 && Math.abs(curDy) > Math.abs(curDx) * 1.4) {
+          const nextDir: Direction = curDy > 0 ? 'DOWN' : 'UP';
+          swipeTriggeredDirRef.current = nextDir;
+          lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
+          onDirectionChangeRef.current(nextDir);
+        } else if (!isPrevHorizontal && Math.abs(curDx) >= 20 && Math.abs(curDx) > Math.abs(curDy) * 1.4) {
+          const nextDir: Direction = curDx > 0 ? 'RIGHT' : 'LEFT';
+          swipeTriggeredDirRef.current = nextDir;
+          lastTriggerPosRef.current = { x: touch.clientX, y: touch.clientY };
+          onDirectionChangeRef.current(nextDir);
+        }
+      }
+    };
+
+    const onNativeTouchEnd = (e: TouchEvent) => {
+      const endTouch = e.changedTouches[0];
+      touchStartRef.current = null;
+      swipeTriggeredDirRef.current = null;
+      lastTriggerPosRef.current = null;
+
+      // If finger was stationary (not a swipe drag), test for double tap!
+      if (!touchMovedRef.current && endTouch && touchStartPosRef.current) {
+        const now = Date.now();
+        const lastTap = lastTapRef.current;
+
+        if (lastTap && now - lastTap.time < 350) {
+          const dist = Math.hypot(
+            endTouch.clientX - lastTap.x,
+            endTouch.clientY - lastTap.y
+          );
+
+          if (dist < 50) {
+            lastTapRef.current = null;
+            triggerDoubleTapAction(endTouch.clientX, endTouch.clientY);
+            return;
+          }
+        }
+
+        lastTapRef.current = {
+          time: now,
+          x: endTouch.clientX,
+          y: endTouch.clientY,
+        };
+      }
+    };
+
+    container.addEventListener('touchstart', onNativeTouchStart, { passive: false });
+    container.addEventListener('touchmove', onNativeTouchMove, { passive: false });
+    container.addEventListener('touchend', onNativeTouchEnd, { passive: false });
+
+    return () => {
+      container.removeEventListener('touchstart', onNativeTouchStart);
+      container.removeEventListener('touchmove', onNativeTouchMove);
+      container.removeEventListener('touchend', onNativeTouchEnd);
+    };
+  }, [triggerDoubleTapAction]);
 
   // Desktop double click support
   const handleDoubleClick = (e: React.MouseEvent) => {
@@ -785,31 +798,25 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       ctx.translate(fx, fy);
 
       if (food.type === 'NORMAL') {
-        // Red Apple (鮮甜紅蘋果 🍎，完美對應關卡目標紅蘋果圖標)
-        ctx.shadowColor = 'rgba(239, 68, 68, 0.95)';
-        ctx.shadowBlur = 0;
-
-        // Rich red apple radial gradient with glossy 3D shine
-        const appleGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.15, 0, 0, radius);
-        appleGrad.addColorStop(0, '#fecdd3'); // highlight soft rose
-        appleGrad.addColorStop(0.3, '#f43f5e'); // vibrant ruby apple
-        appleGrad.addColorStop(0.8, '#e11d48'); // rich crimson red
-        appleGrad.addColorStop(1, '#881337'); // deep apple shadow
-        ctx.fillStyle = appleGrad;
-
-        // Main Apple Body
+        // Red Apple (鮮甜紅蘋果 🍎)
+        ctx.fillStyle = '#e11d48';
         ctx.beginPath();
         ctx.arc(0, 1, radius, 0, Math.PI * 2);
         ctx.fill();
 
+        // Inner soft highlight arc
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.15, -radius * 0.15, radius * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+
         // Apple Dimple at top
-        ctx.shadowBlur = 0;
         ctx.fillStyle = '#9f1239';
         ctx.beginPath();
         ctx.ellipse(0, -radius * 0.72, radius * 0.22, radius * 0.1, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Curved Apple Stem (褐色小果蒂)
+        // Curved Apple Stem
         ctx.strokeStyle = '#78350f';
         ctx.lineWidth = Math.max(1.8, radius * 0.16);
         ctx.lineCap = 'round';
@@ -818,7 +825,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.quadraticCurveTo(1.5, -radius * 1.05, 3.2, -radius * 1.25);
         ctx.stroke();
 
-        // Fresh Green Apple Leaf (翠綠蘋果葉片 🍃)
+        // Fresh Green Apple Leaf 🍃
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
         ctx.ellipse(3.8, -radius * 0.88, 4.5, 2.2, Math.PI / 4, 0, Math.PI * 2);
@@ -827,7 +834,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.lineWidth = 0.8;
         ctx.stroke();
 
-        // Glossy Specular Glint (晶瑩高光亮點)
+        // Glossy Specular Glint
         ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
         ctx.beginPath();
         ctx.arc(-radius * 0.35, -radius * 0.35, radius * 0.28, 0, Math.PI * 2);
@@ -839,32 +846,25 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.arc(radius * 0.28, radius * 0.28, radius * 0.12, 0, Math.PI * 2);
         ctx.fill();
       } else if (food.type === 'GOLDEN') {
-        // Golden Apple (璀璨金蘋果，完美統一全場蘋果體系，絕非星星)
-        ctx.shadowColor = 'rgba(251, 191, 36, 0.95)';
-        ctx.shadowBlur = 0;
-
-        // Rich golden apple radial gradient with glossy 3D shine
-        const goldAppleGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.15, 0, 0, radius);
-        goldAppleGrad.addColorStop(0, '#ffffff'); // bright specular center
-        goldAppleGrad.addColorStop(0.2, '#fef9c3'); // shimmering soft gold
-        goldAppleGrad.addColorStop(0.5, '#fde047'); // vibrant pure gold
-        goldAppleGrad.addColorStop(0.8, '#eab308'); // rich amber gold
-        goldAppleGrad.addColorStop(1, '#a16207'); // deep golden shadow
-        ctx.fillStyle = goldAppleGrad;
-
-        // Main Golden Apple Body
+        // Golden Apple (璀璨金蘋果)
+        ctx.fillStyle = '#eab308';
         ctx.beginPath();
         ctx.arc(0, 1, radius, 0, Math.PI * 2);
         ctx.fill();
 
+        // Inner bright gold highlight
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.15, -radius * 0.15, radius * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+
         // Apple Dimple at top
-        ctx.shadowBlur = 0;
         ctx.fillStyle = '#a16207';
         ctx.beginPath();
         ctx.ellipse(0, -radius * 0.72, radius * 0.22, radius * 0.1, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Curved Apple Stem (褐色小果蒂)
+        // Curved Apple Stem
         ctx.strokeStyle = '#78350f';
         ctx.lineWidth = Math.max(1.8, radius * 0.16);
         ctx.lineCap = 'round';
@@ -873,7 +873,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.quadraticCurveTo(1.5, -radius * 1.05, 3.2, -radius * 1.25);
         ctx.stroke();
 
-        // Fresh Emerald Apple Leaf (翠綠蘋果葉片 🍃)
+        // Fresh Emerald Apple Leaf 🍃
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
         ctx.ellipse(3.8, -radius * 0.88, 4.5, 2.2, Math.PI / 4, 0, Math.PI * 2);
@@ -882,73 +882,33 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.lineWidth = 0.8;
         ctx.stroke();
 
-        // Glossy Specular Glint (晶瑩黃金高光亮點)
+        // Glossy Specular Glint
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.beginPath();
         ctx.arc(-radius * 0.35, -radius * 0.35, radius * 0.28, 0, Math.PI * 2);
         ctx.fill();
 
-        // Secondary soft sparkle
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.beginPath();
-        ctx.arc(radius * 0.28, radius * 0.28, radius * 0.12, 0, Math.PI * 2);
-        ctx.fill();
-
         // Soft golden glow ring / aura around the golden apple
-        ctx.strokeStyle = 'rgba(253, 224, 71, 0.55)';
+        ctx.strokeStyle = 'rgba(253, 224, 71, 0.65)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(0, 1, radius * 1.15, 0, Math.PI * 2);
         ctx.stroke();
       } else if (food.type === 'SHIELD') {
-        // Monster Plasma Shield Orb (怪獸守護力場盾牌，嚴格只顯示盾牌，絕不顯示棒棒糖 🍭)
-        ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-        ctx.shadowBlur = 0;
-
-        const shieldGrad = ctx.createRadialGradient(0, 0, radius * 0.2, 0, 0, radius);
-        shieldGrad.addColorStop(0, '#e0f2fe');
-        shieldGrad.addColorStop(0.6, '#38bdf8');
-        shieldGrad.addColorStop(1, '#0284c7');
-        ctx.fillStyle = shieldGrad;
-
+        // Monster Plasma Shield Orb (怪獸守護力場盾牌 🛡️)
+        ctx.fillStyle = '#0284c7';
         ctx.beginPath();
         ctx.arc(0, 0, radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Cute bubble aura
-        ctx.strokeStyle = '#bae6fd';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-
-        // Pure crisp vector Shield Emblem + 🛡️ (只顯示盾牌，對齊關卡目標 🛡️)
-        const sW = radius * 0.92;
-        const sH = radius * 1.08;
-        const topY = -sH * 0.48;
-        const midY = -sH * 0.02;
-        const botY = sH * 0.52;
-
-        ctx.save();
-        ctx.shadowBlur = 0;
-        // Inner metallic shield badge shape
+        ctx.fillStyle = '#38bdf8';
         ctx.beginPath();
-        ctx.moveTo(0, topY);
-        ctx.lineTo(sW * 0.48, topY + sH * 0.08);
-        ctx.lineTo(sW * 0.44, midY);
-        ctx.quadraticCurveTo(sW * 0.35, botY * 0.72, 0, botY);
-        ctx.quadraticCurveTo(-sW * 0.35, botY * 0.72, -sW * 0.44, midY);
-        ctx.lineTo(-sW * 0.48, topY + sH * 0.08);
-        ctx.closePath();
-
-        const badgeGrad = ctx.createLinearGradient(0, topY, 0, botY);
-        badgeGrad.addColorStop(0, '#ffffff');
-        badgeGrad.addColorStop(0.35, '#bae6fd');
-        badgeGrad.addColorStop(0.7, '#38bdf8');
-        badgeGrad.addColorStop(1, '#0284c7');
-        ctx.fillStyle = badgeGrad;
+        ctx.arc(-radius * 0.1, -radius * 0.1, radius * 0.75, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.6;
+        // Bubble aura
+        ctx.strokeStyle = '#bae6fd';
+        ctx.lineWidth = 2;
         ctx.stroke();
 
         // Centered clear shield icon 🛡️
@@ -956,12 +916,8 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('🛡️', 0, 0.5);
-        ctx.restore();
       } else if (food.type === 'SLOW') {
-        // Grape Gummy Drop (紫葡萄晶凍 🍇 - 純向量立體葡萄串，絕不重影走位)
-        ctx.shadowColor = 'rgba(192, 132, 252, 0.95)';
-        ctx.shadowBlur = 0;
-
+        // Grape Gummy Drop (紫葡萄晶凍 🍇)
         // Top stem & vine leaf
         ctx.strokeStyle = '#78350f';
         ctx.lineWidth = 1.6;
@@ -975,7 +931,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.ellipse(radius * 0.35, -radius * 0.65, radius * 0.32, radius * 0.18, -Math.PI / 6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Grape cluster berries
+        // Grape cluster berries with solid fills + highlights
         const grapePositions = [
           { x: -radius * 0.38, y: -radius * 0.18, r: radius * 0.32 },
           { x: 0, y: -radius * 0.26, r: radius * 0.34 },
@@ -986,14 +942,14 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ];
 
         grapePositions.forEach((g) => {
-          const gGrad = ctx.createRadialGradient(g.x - g.r * 0.3, g.y - g.r * 0.3, g.r * 0.15, g.x, g.y, g.r);
-          gGrad.addColorStop(0, '#f3e8ff');
-          gGrad.addColorStop(0.4, '#c084fc');
-          gGrad.addColorStop(0.85, '#7e22ce');
-          gGrad.addColorStop(1, '#581c87');
-          ctx.fillStyle = gGrad;
+          ctx.fillStyle = '#7e22ce';
           ctx.beginPath();
           ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#c084fc';
+          ctx.beginPath();
+          ctx.arc(g.x - g.r * 0.15, g.y - g.r * 0.15, g.r * 0.6, 0, Math.PI * 2);
           ctx.fill();
 
           // Glint
@@ -1004,9 +960,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         });
       } else if (food.type === 'COIN') {
         // Golden Chocolate Coin (金幣巧克力)
-        ctx.shadowColor = 'rgba(245, 158, 11, 0.9)';
-        ctx.shadowBlur = 0;
-
         ctx.fillStyle = '#fde047';
         ctx.beginPath();
         ctx.arc(0, 0, radius, 0, Math.PI * 2);
@@ -1023,7 +976,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        ctx.shadowBlur = 0;
         ctx.fillStyle = '#b45309';
         ctx.font = `bold ${Math.floor(radius * 0.95)}px sans-serif`;
         ctx.textAlign = 'center';
@@ -1031,21 +983,17 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.fillText('★', 0, 0.5);
       } else if (food.type === 'BLUE') {
         // Blue Raspberry Sugar Crystal (藍莓冰晶糖)
-        ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-        ctx.shadowBlur = 0;
-
-        const blueGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.2, 0, 0, radius);
-        blueGrad.addColorStop(0, '#bae6fd');
-        blueGrad.addColorStop(0.5, '#38bdf8');
-        blueGrad.addColorStop(1, '#0284c7');
-        ctx.fillStyle = blueGrad;
-
+        ctx.fillStyle = '#0284c7';
         ctx.beginPath();
         ctx.arc(0, 1, radius, 0, Math.PI * 2);
         ctx.fill();
 
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.15, -radius * 0.15, radius * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+
         // Leaf
-        ctx.shadowBlur = 0;
         ctx.fillStyle = '#67e8f9';
         ctx.beginPath();
         ctx.ellipse(3, -radius * 0.85, 4, 2, Math.PI / 4, 0, Math.PI * 2);
@@ -1058,21 +1006,17 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.fill();
       } else if (food.type === 'GREEN') {
         // Crisp Mint Apple Gummy (青蘋果薄荷糖)
-        ctx.shadowColor = 'rgba(74, 222, 128, 0.95)';
-        ctx.shadowBlur = 0;
-
-        const greenGrad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.2, 0, 0, radius);
-        greenGrad.addColorStop(0, '#bbf7d0');
-        greenGrad.addColorStop(0.5, '#4ade80');
-        greenGrad.addColorStop(1, '#16a34a');
-        ctx.fillStyle = greenGrad;
-
+        ctx.fillStyle = '#16a34a';
         ctx.beginPath();
         ctx.arc(0, 1, radius, 0, Math.PI * 2);
         ctx.fill();
 
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.15, -radius * 0.15, radius * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+
         // Leaf
-        ctx.shadowBlur = 0;
         ctx.fillStyle = '#86efac';
         ctx.beginPath();
         ctx.ellipse(3, -radius * 0.85, 4, 2, Math.PI / 4, 0, Math.PI * 2);
@@ -1486,13 +1430,27 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       }
       ctx.shadowBlur = 0;
 
-      // Draw Body Segments from tail to head
-      for (let i = snake.length - 1; i >= 1; i--) {
-        const seg = snake[i];
-        const segX = gridX + seg.x * cellW + cellW / 2;
-        const segY = gridY + seg.y * cellH + cellH / 2;
+      // Sub-tile smooth interpolation: glides the snake smoothly at 60/120 FPS between grid ticks
+      const tickInfo = tickInterpolationRef?.current;
+      const interpProgress = tickInfo && !isPaused
+        ? Math.min(1, Math.max(0, (performance.now() - tickInfo.lastTickTime) / Math.max(30, tickInfo.interval)))
+        : 1;
 
-        const progress = i / snake.length; // 0 near head, 1 at tail
+      const prevSnakeList = tickInfo?.prevSnake || snake;
+      const currentSnakeList = tickInfo?.currentSnake || snake;
+
+      // Draw Body Segments from tail to head
+      for (let i = currentSnakeList.length - 1; i >= 1; i--) {
+        const curSeg = currentSnakeList[i];
+        const prevSeg = prevSnakeList[i] || curSeg;
+        const isWrap = Math.abs(curSeg.x - prevSeg.x) > 1 || Math.abs(curSeg.y - prevSeg.y) > 1;
+        const segXGrid = isWrap ? curSeg.x : prevSeg.x + (curSeg.x - prevSeg.x) * interpProgress;
+        const segYGrid = isWrap ? curSeg.y : prevSeg.y + (curSeg.y - prevSeg.y) * interpProgress;
+
+        const segX = gridX + segXGrid * cellW + cellW / 2;
+        const segY = gridY + segYGrid * cellH + cellH / 2;
+
+        const progress = i / currentSnakeList.length; // 0 near head, 1 at tail
         const baseRadius = Math.min(cellW, cellH) / 2;
         const segRadius = (baseRadius - 1.2) * (1 - progress * 0.22);
 
@@ -1558,10 +1516,15 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.fill();
       }
 
-      // Draw Head (Cute Expressive Character Face)
-      const head = snake[0];
-      const headX = gridX + head.x * cellW + cellW / 2;
-      const headY = gridY + head.y * cellH + cellH / 2;
+      // Draw Head (Cute Expressive Character Face with smooth sub-tile positioning)
+      const curHead = currentSnakeList[0] || snake[0];
+      const prevHead = prevSnakeList[0] || curHead;
+      const isHeadWrap = Math.abs(curHead.x - prevHead.x) > 1 || Math.abs(curHead.y - prevHead.y) > 1;
+      const headXGrid = isHeadWrap ? curHead.x : prevHead.x + (curHead.x - prevHead.x) * interpProgress;
+      const headYGrid = isHeadWrap ? curHead.y : prevHead.y + (curHead.y - prevHead.y) * interpProgress;
+
+      const headX = gridX + headXGrid * cellW + cellW / 2;
+      const headY = gridY + headYGrid * cellH + cellH / 2;
       const headRadius = Math.min(cellW, cellH) / 2 - 0.8;
 
       // 1. Cute Monster Horns / Dragon Ear Fins (Positioned behind head based on direction)
@@ -1608,7 +1571,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       });
       ctx.restore();
 
-      // Head 3D Monster Gradient / Rainbow Fever Prism Head / Chameleon Transformation Head
+      // Head Solid 3D Color (Zero GC allocations!)
       const headRainbowHue = Math.floor((Date.now() / 8) % 360);
       const headFillColor = isRainbowActive
         ? `hsl(${headRainbowHue}, 100%, 65%)`
@@ -1620,25 +1583,16 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ? '#16a34a'
         : skin.headColor;
 
-      const headGrad = ctx.createRadialGradient(
-        headX - headRadius * 0.3,
-        headY - headRadius * 0.3,
-        headRadius * 0.1,
-        headX,
-        headY,
-        headRadius
-      );
-      const headGlint = snakeColor === 'RED'
-        ? '#fee2e2'
-        : snakeColor === 'BLUE'
-        ? '#e0f2fe'
-        : snakeColor === 'GREEN'
-        ? '#dcfce7'
-        : '#ffffff';
-      headGrad.addColorStop(0, headGlint);
-      headGrad.addColorStop(0.25, headFillColor);
-      headGrad.addColorStop(1, headFillColor);
-      ctx.fillStyle = headGrad;
+      ctx.fillStyle = headFillColor;
+      ctx.beginPath();
+      ctx.arc(headX, headY, headRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glossy 3D specular shine on head
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.beginPath();
+      ctx.arc(headX - headRadius * 0.28, headY - headRadius * 0.28, headRadius * 0.38, 0, Math.PI * 2);
+      ctx.fill();
 
       if (snakeGlowBlur > 0) {
         ctx.shadowColor = snakeGlowColor;
@@ -2771,9 +2725,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ref={containerRef}
         id="game-canvas-container"
         className="relative w-full flex-1 min-h-0 flex items-center justify-center mx-auto touch-none select-none p-1 overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         onDoubleClick={handleDoubleClick}
       >
         <canvas
@@ -2975,102 +2926,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
             </div>
           )}
         </div>
-      </div>
-
-      {/* 2. Mobile Directional Controls & Mode Switcher */}
-      <div className="w-full shrink-0 flex flex-col items-center justify-center select-none touch-none px-4 pb-0.5 pt-0.5">
-        {controlType === 'DPAD' ? (
-          <div className="relative flex items-center justify-between w-full max-w-[340px] px-2">
-            {/* Quick Mode Toggle Pill */}
-            <button
-              type="button"
-              onClick={() => onToggleControlType?.('SWIPE')}
-              className="px-2.5 py-1.5 rounded-full bg-slate-900/85 border border-slate-700/80 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1 active:scale-95 transition-all shadow-md cursor-pointer"
-            >
-              <span>👆</span>
-              <span>{language === 'en' ? 'Swipe' : language === 'ja' ? 'スワイプ' : '切換滑動'}</span>
-            </button>
-
-            {/* Cross D-Pad */}
-            <div className="grid grid-cols-3 grid-rows-3 gap-1.5 w-[132px] h-[132px] p-1 bg-slate-950/70 rounded-3xl border border-slate-800/80 shadow-2xl">
-              <div />
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onDirectionChange('UP');
-                }}
-                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
-                title="Up"
-              >
-                <ChevronUp className="w-6 h-6 stroke-[3]" />
-              </button>
-              <div />
-
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onDirectionChange('LEFT');
-                }}
-                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
-                title="Left"
-              >
-                <ChevronLeft className="w-6 h-6 stroke-[3]" />
-              </button>
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="w-3.5 h-3.5 rounded-full bg-slate-700/60 border border-slate-600/60" />
-              </div>
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onDirectionChange('RIGHT');
-                }}
-                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
-                title="Right"
-              >
-                <ChevronRight className="w-6 h-6 stroke-[3]" />
-              </button>
-
-              <div />
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onDirectionChange('DOWN');
-                }}
-                className="w-full h-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 active:from-cyan-500 active:to-blue-600 border border-slate-700 active:border-cyan-300 flex items-center justify-center text-slate-200 active:text-white shadow-md active:scale-90 transition-transform cursor-pointer"
-                title="Down"
-              >
-                <ChevronDown className="w-6 h-6 stroke-[3]" />
-              </button>
-              <div />
-            </div>
-
-            {/* Quick Pause Button */}
-            <button
-              type="button"
-              onClick={onTogglePause}
-              className="px-2.5 py-1.5 rounded-full bg-slate-900/85 border border-slate-700/80 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1 active:scale-95 transition-all shadow-md cursor-pointer"
-            >
-              <Pause className="w-3.5 h-3.5" />
-              <span>{language === 'en' ? 'Pause' : language === 'ja' ? '一時停止' : '暫停'}</span>
-            </button>
-          </div>
-        ) : (
-          /* When in Swipe mode, show a small toggle pill at the bottom */
-          <div className="flex items-center justify-center py-0.5">
-            <button
-              type="button"
-              onClick={() => onToggleControlType?.('DPAD')}
-              className="px-3 py-1 rounded-full bg-slate-900/70 hover:bg-slate-800/90 border border-slate-700/60 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1.5 active:scale-95 transition-all shadow-sm cursor-pointer"
-            >
-              <span>🕹️</span>
-              <span>{language === 'en' ? 'Switch to D-Pad' : language === 'ja' ? '十字キーに切替' : '切換方向鍵'}</span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
