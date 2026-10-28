@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeFirestore, getFirestore, Firestore, doc, getDoc, setLogLevel } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getInstallations, getId, deleteInstallations, Installations } from 'firebase/installations';
+import { getAuth, signInAnonymously, onAuthStateChanged, Auth } from 'firebase/auth';
 
 // Set Firestore log level to 'error' to avoid noisy offline warning logs during network reconnections
 try {
@@ -23,6 +24,16 @@ export const firebaseConfig = {
 
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// Initialize Firebase Auth & Anonymous Sign-In (satisfies request.auth != null in security rules)
+export const auth: Auth = getAuth(app);
+if (typeof window !== 'undefined') {
+  onAuthStateChanged(auth, (user) => {
+    if (!user) {
+      signInAnonymously(auth).catch(() => {});
+    }
+  });
+}
 
 // Initialize Cloud Firestore with auto-detect long polling and robust connection fallback
 let firestoreDb: Firestore;

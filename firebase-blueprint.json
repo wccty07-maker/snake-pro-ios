@@ -12,7 +12,7 @@
         "username": {
           "type": "string",
           "description": "The nickname/display name of the player",
-          "maxLength": 30
+          "maxLength": 128
         },
         "score": {
           "type": "integer",

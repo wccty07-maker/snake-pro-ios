@@ -89,11 +89,11 @@ export async function submitScore(
   localHighScore?: number,
   forceUpdate?: boolean
 ): Promise<SubmitScoreResult> {
-  const currentUserId = userId?.trim() || getOrCreatePlayerId();
+  const currentUserId = (userId?.trim() || getOrCreatePlayerId() || 'player').trim();
   const targetMode = normalizeMode(mode);
-  const safeScore = Math.floor(Math.max(0, score));
-  // 所有排行榜不再使用 random username，改為以 FID 作為玩家唯一匿名標識
-  const safeUsername = currentUserId;
+  const safeScore = Number.isFinite(score) ? Math.floor(Math.max(0, score)) : 0;
+  // 嚴格確保 safeUsername 長度介於 1~30 字元，符合 Firestore 規則驗證
+  const safeUsername = (username?.trim() || currentUserId).slice(0, 30) || 'Player';
 
   // 1. 若得分 <= 0 則不進行提交
   if (safeScore <= 0) {
@@ -145,10 +145,13 @@ export async function submitScore(
           reason: 'NEW_RECORD',
         };
       } else {
-        // 如果分數沒突破，但使用者更新了暱稱，順便更新暱稱
+        // 如果分數沒突破，但使用者更新了暱稱，順便更新暱稱（必須傳齊 mode 與 score 以符合安全規則）
         if (data.username !== safeUsername) {
           await updateDoc(playerDocRef, {
+            userId: currentUserId,
             username: safeUsername,
+            score: existingScore,
+            mode: targetMode,
             updatedAt: serverTimestamp(),
           }).catch(() => {});
         }
@@ -180,6 +183,10 @@ export async function submitScore(
       };
     }
   } catch (error) {
+    const isPermissionError =
+      error instanceof Error &&
+      (error.message.toLowerCase().includes('permission') ||
+        (error as { code?: string }).code === 'permission-denied');
     const isOfflineOrUnavailable =
       error instanceof Error &&
       (error.message.includes('unavailable') ||
@@ -187,8 +194,12 @@ export async function submitScore(
         (error as { code?: string }).code === 'unavailable');
     if (isOfflineOrUnavailable) {
       console.warn(`[Leaderboard] 網路暫時離線或後端連線不穩定 (${targetMode})，分數將在恢復後重試。`);
+    } else if (isPermissionError) {
+      console.warn(
+        `[Leaderboard] Firestore 寫入權限受限 (${targetMode})。分數已妥善保存在本地。請確認 Firebase Console 的 Firestore 安全規則已發布。`
+      );
     } else {
-      console.error(`提交 ${targetMode} 排行榜分數至 Firestore 失敗:`, error);
+      console.warn(`[Leaderboard] 提交 ${targetMode} 排行榜分數暫時未能同步至雲端:`, error);
     }
     return {
       updated: false,
@@ -457,9 +468,12 @@ export async function updatePlayerUsernameInLeaderboard(
         const docRef = doc(db, COLLECTION_NAME, `${playerId}_${m}`);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
+          const data = snap.data();
           await updateDoc(docRef, {
             userId: playerId,
-            username: playerId,
+            username: playerId.slice(0, 30),
+            score: typeof data.score === 'number' ? data.score : 0,
+            mode: m,
             updatedAt: serverTimestamp(),
           });
         }

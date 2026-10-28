@@ -141,27 +141,25 @@ class SoundEngine {
     };
   }
 
-  private handleVisibilityOrFocusChange(isVisible: boolean) {
-    this.isHidden = !isVisible;
+  public handleVisibilityOrFocusChange(isVisible: boolean) {
+    const isDocVisible = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
+    const active = isVisible && isDocVisible;
+    this.isHidden = !active;
 
-    if (!isVisible) {
+    if (!active) {
+      // App is not in foreground or document is hidden: immediately kill all BGM and suspend audio
       if (this.isBgmPlaying) {
         this.wasBgmPlayingBeforeHidden = true;
       }
-      if (this.bgmIntervalId !== null) {
-        clearInterval(this.bgmIntervalId);
-        this.bgmIntervalId = null;
-      }
+      this.stopBgm();
       if (this.ctx && this.ctx.state === 'running') {
         this.ctx.suspend().catch(() => {});
       }
     } else {
-      // Immediate attempt when returning to app (e.g. from Privacy / Terms web page)
-      this.resumeAndRestoreAudio().catch(() => {});
-      // Staggered attempts to catch iOS CoreAudio hardware release
-      setTimeout(() => this.resumeAndRestoreAudio().catch(() => {}), 150);
-      setTimeout(() => this.resumeAndRestoreAudio().catch(() => {}), 450);
-      setTimeout(() => this.resumeAndRestoreAudio().catch(() => {}), 900);
+      // App is visible in foreground: resume BGM only if user had BGM enabled and it was playing
+      if (this.bgmEnabled && this.wasBgmPlayingBeforeHidden) {
+        this.resumeAndRestoreAudio().catch(() => {});
+      }
     }
   }
 
@@ -203,6 +201,10 @@ class SoundEngine {
 
     window.addEventListener('focus', () => {
       this.handleVisibilityOrFocusChange(true);
+    });
+
+    window.addEventListener('blur', () => {
+      this.handleVisibilityOrFocusChange(false);
     });
 
     // Native Capacitor / Cordova lifecycle hooks for app resume
@@ -340,10 +342,10 @@ class SoundEngine {
 
   public prepareForExternalNavigation() {
     this.isHidden = true;
-    if (this.bgmIntervalId !== null) {
-      clearInterval(this.bgmIntervalId);
-      this.bgmIntervalId = null;
+    if (this.isBgmPlaying) {
+      this.wasBgmPlayingBeforeHidden = true;
     }
+    this.stopBgm();
     if (this.ctx && this.ctx.state === 'running') {
       try {
         this.ctx.suspend().catch(() => {});

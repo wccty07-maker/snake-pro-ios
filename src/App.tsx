@@ -1308,8 +1308,9 @@ export default function App() {
         if (appView === 'PLAYING' && isPlaying && !isPaused) {
           pauseGame(true);
         }
+        soundEngine.handleVisibilityOrFocusChange(false);
       } else if (document.visibilityState === 'visible') {
-        soundEngine.resumeAndRestoreAudio().catch(() => {});
+        soundEngine.handleVisibilityOrFocusChange(true);
       }
     };
 
@@ -1317,20 +1318,29 @@ export default function App() {
       if (appView === 'PLAYING' && isPlaying && !isPaused) {
         pauseGame(true);
       }
+      soundEngine.handleVisibilityOrFocusChange(false);
     };
 
     const handleFocus = () => {
-      soundEngine.resumeAndRestoreAudio().catch(() => {});
+      if (document.visibilityState === 'visible') {
+        soundEngine.handleVisibilityOrFocusChange(true);
+      }
+    };
+
+    const handleBlur = () => {
+      soundEngine.handleVisibilityOrFocusChange(false);
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
     };
   }, [appView, isPlaying, isPaused, pauseGame]);
 
