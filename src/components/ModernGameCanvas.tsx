@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Point, Direction, FoodItem, Particle, FloatingText, SnakeSkin, ArenaTheme, LevelMission, RovingSnake } from '../types';
-import { GRID_COLS, GRID_ROWS, TickInterpolation } from '../hooks/useSnakeEngine';
+import { GRID_COLS, GRID_ROWS } from '../hooks/useSnakeEngine';
 import { Pause, Play, RotateCcw, Home, Target, ShieldAlert } from 'lucide-react';
 import { soundEngine } from '../utils/audio';
 import { SupportedLanguage, getTranslation } from '../utils/i18n';
@@ -16,7 +16,6 @@ interface ModernGameCanvasProps {
   particles?: Particle[];
   floatingTexts?: FloatingText[];
   fxRef?: React.MutableRefObject<{ particles: Particle[]; floatingTexts: FloatingText[] }>;
-  tickInterpolationRef?: React.MutableRefObject<TickInterpolation>;
   skin: SnakeSkin;
   arena: ArenaTheme;
   showGrid: boolean;
@@ -69,7 +68,6 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
   particles = [],
   floatingTexts = [],
   fxRef,
-  tickInterpolationRef,
   skin,
   arena,
   showGrid,
@@ -1430,27 +1428,13 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       }
       ctx.shadowBlur = 0;
 
-      // Sub-tile smooth interpolation: glides the snake smoothly at 60/120 FPS between grid ticks
-      const tickInfo = tickInterpolationRef?.current;
-      const interpProgress = tickInfo && !isPaused
-        ? Math.min(1, Math.max(0, (performance.now() - tickInfo.lastTickTime) / Math.max(30, tickInfo.interval)))
-        : 1;
+      // Draw Body Segments from tail to head (Classic discrete grid snap)
+      for (let i = snake.length - 1; i >= 1; i--) {
+        const seg = snake[i];
+        const segX = gridX + seg.x * cellW + cellW / 2;
+        const segY = gridY + seg.y * cellH + cellH / 2;
 
-      const prevSnakeList = tickInfo?.prevSnake || snake;
-      const currentSnakeList = tickInfo?.currentSnake || snake;
-
-      // Draw Body Segments from tail to head
-      for (let i = currentSnakeList.length - 1; i >= 1; i--) {
-        const curSeg = currentSnakeList[i];
-        const prevSeg = prevSnakeList[i] || curSeg;
-        const isWrap = Math.abs(curSeg.x - prevSeg.x) > 1 || Math.abs(curSeg.y - prevSeg.y) > 1;
-        const segXGrid = isWrap ? curSeg.x : prevSeg.x + (curSeg.x - prevSeg.x) * interpProgress;
-        const segYGrid = isWrap ? curSeg.y : prevSeg.y + (curSeg.y - prevSeg.y) * interpProgress;
-
-        const segX = gridX + segXGrid * cellW + cellW / 2;
-        const segY = gridY + segYGrid * cellH + cellH / 2;
-
-        const progress = i / currentSnakeList.length; // 0 near head, 1 at tail
+        const progress = i / snake.length; // 0 near head, 1 at tail
         const baseRadius = Math.min(cellW, cellH) / 2;
         const segRadius = (baseRadius - 1.2) * (1 - progress * 0.22);
 
@@ -1516,15 +1500,10 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         ctx.fill();
       }
 
-      // Draw Head (Cute Expressive Character Face with smooth sub-tile positioning)
-      const curHead = currentSnakeList[0] || snake[0];
-      const prevHead = prevSnakeList[0] || curHead;
-      const isHeadWrap = Math.abs(curHead.x - prevHead.x) > 1 || Math.abs(curHead.y - prevHead.y) > 1;
-      const headXGrid = isHeadWrap ? curHead.x : prevHead.x + (curHead.x - prevHead.x) * interpProgress;
-      const headYGrid = isHeadWrap ? curHead.y : prevHead.y + (curHead.y - prevHead.y) * interpProgress;
-
-      const headX = gridX + headXGrid * cellW + cellW / 2;
-      const headY = gridY + headYGrid * cellH + cellH / 2;
+      // Draw Head (Classic discrete grid snap)
+      const head = snake[0];
+      const headX = gridX + head.x * cellW + cellW / 2;
+      const headY = gridY + head.y * cellH + cellH / 2;
       const headRadius = Math.min(cellW, cellH) / 2 - 0.8;
 
       // 1. Cute Monster Horns / Dragon Ear Fins (Positioned behind head based on direction)

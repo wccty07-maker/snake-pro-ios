@@ -7,12 +7,6 @@ import confetti from 'canvas-confetti';
 export const GRID_COLS = 20;
 export const GRID_ROWS = 28;
 
-export interface TickInterpolation {
-  prevSnake: Point[];
-  currentSnake: Point[];
-  lastTickTime: number;
-  interval: number;
-}
 
 const INITIAL_SNAKE: Point[] = [
   { x: 10, y: 15 },
@@ -661,14 +655,6 @@ export function useSnakeEngine({
   const fxRef = useRef<{ particles: Particle[]; floatingTexts: FloatingText[] }>({
     particles: [],
     floatingTexts: [],
-  });
-
-  // Smooth sub-tile interpolation reference (delivers buttery 60/120 FPS continuous gliding)
-  const tickInterpolationRef = useRef<TickInterpolation>({
-    prevSnake: INITIAL_SNAKE,
-    currentSnake: INITIAL_SNAKE,
-    lastTickTime: performance.now(),
-    interval: 95,
   });
 
   // Refs for loop & active config
@@ -2254,13 +2240,6 @@ export function useSnakeEngine({
       }
     }
 
-    tickInterpolationRef.current = {
-      prevSnake: [...INITIAL_SNAKE],
-      currentSnake: [...INITIAL_SNAKE],
-      lastTickTime: performance.now(),
-      interval: 95,
-    };
-
     setFoodItems(initialFoods);
     foodItemsRef.current = initialFoods;
     fxRef.current.particles = [];
@@ -2413,12 +2392,6 @@ export function useSnakeEngine({
     const initSnake = [...INITIAL_SNAKE];
     setSnake(initSnake);
     snakeRef.current = initSnake;
-    tickInterpolationRef.current = {
-      prevSnake: initSnake,
-      currentSnake: initSnake,
-      lastTickTime: performance.now(),
-      interval: 95,
-    };
     setDirection('UP');
     dirRef.current = 'UP';
     setScore(0);
@@ -2849,14 +2822,6 @@ export function useSnakeEngine({
       spawnParticles(newSnake[0].x, newSnake[0].y, '#6366f1', 16);
       addFloatingText(tEngine('⏪ 尾變蛇頭!', '⏪ Reverse Head!', '⏪ 尾頭反転!'), newSnake[0].x, newSnake[0].y, '#818cf8');
     }
-
-    const curInterval = getSpeedRef.current();
-    tickInterpolationRef.current = {
-      prevSnake,
-      currentSnake: newSnake,
-      lastTickTime: performance.now(),
-      interval: curInterval,
-    };
 
     snakeRef.current = newSnake;
     setSnake(newSnake);
@@ -3450,7 +3415,6 @@ export function useSnakeEngine({
     particles: fxRef.current.particles,
     floatingTexts: fxRef.current.floatingTexts,
     fxRef,
-    tickInterpolationRef,
     revivesUsed,
     canRevive: mode === 'LEVELS' && revivesUsed < 1,
     currentSpeedMs: getSpeed(),

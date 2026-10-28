@@ -1253,7 +1253,6 @@ export default function App() {
     pauseGame,
     changeDirection,
     triggerReverseGear,
-    tickInterpolationRef,
   } = useSnakeEngine({
     mode: selectedMode,
     currentLevel: selectedMode === 'LEVELS' ? currentLevel : undefined,
@@ -2252,7 +2251,6 @@ export default function App() {
               batterySaverEnabled={profile.batterySaverEnabled ?? false}
               targetFps={profile.targetFps ?? 60}
               glowEffectsEnabled={profile.glowEffectsEnabled ?? true}
-              tickInterpolationRef={tickInterpolationRef}
               onDirectionChange={changeDirection}
               onTogglePause={pauseGame}
               onRestart={handleInGameRestart}

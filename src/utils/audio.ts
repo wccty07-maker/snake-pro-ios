@@ -134,15 +134,8 @@ class SoundEngine {
           }
         });
       } else if (state === 'interrupted' || state === 'suspended') {
-        console.log('[SoundEngine] iOS AudioContext state changed to', state, '- auto resuming');
         if (!this.isHidden) {
-          setTimeout(() => {
-            if ((this.ctx?.state as string) === 'interrupted') {
-              this.recreateContext();
-            } else if (this.ctx?.state === 'suspended') {
-              this.ctx.resume().catch(() => {});
-            }
-          }, 150);
+          ctx.resume().catch(() => {});
         }
       }
     };
@@ -180,21 +173,15 @@ class SoundEngine {
     // will instantly re-wake audio on the very first touch, even if iOS suspended it.
     const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
     const handleGesture = () => {
-      unlockHtml5Audio();
-
-      if (this.ctx) {
-        const s = this.ctx.state as string;
-        if (s === 'suspended' || s === 'interrupted') {
-          this.ctx.resume().catch(() => {});
-        }
-      } else {
-        this.initContext();
+      // Fast path: if already active and running, zero work on gameplay touch events
+      if (this.ctx && this.ctx.state === 'running') {
+        return;
       }
 
-      if (!this.ctx || this.ctx.state !== 'running') {
-        this.resumeAndRestoreAudio().catch(() => {});
-      } else {
-        this.isUnlockedState = true;
+      unlockHtml5Audio();
+      this.initContext();
+      if (this.ctx && (this.ctx.state === 'suspended' || (this.ctx.state as string) === 'interrupted')) {
+        this.ctx.resume().catch(() => {});
       }
     };
 
@@ -645,11 +632,9 @@ class SoundEngine {
         const now = audioCtx.currentTime;
         const stepIdx = this.currentStep % melodyPattern.length;
         const melodyFreq = melodyPattern[stepIdx];
-        const glockFreq = glockPattern[stepIdx % glockPattern.length];
-        const harmonyFreq = harmonyPattern[stepIdx % harmonyPattern.length];
         const bassFreq = bassPattern[stepIdx % bassPattern.length];
 
-        // 1. Marimba Melody Lead
+        // 1. Warm Melodic Marimba Lead
         if (melodyFreq > 0) {
           const osc = audioCtx.createOscillator();
           const noteGain = audioCtx.createGain();
@@ -657,7 +642,6 @@ class SoundEngine {
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(melodyFreq, now);
 
-          // Natural warm marimba envelope (well-balanced volume)
           noteGain.gain.setValueAtTime(0.18, now);
           noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
 
@@ -669,45 +653,7 @@ class SoundEngine {
           osc.stop(now + 0.18);
         }
 
-        // 2. Sparkling Glockenspiel / Music Box Bell (Movement B, C, D)
-        if (glockFreq > 0 && (stepIdx >= 24 || stepIdx % 4 === 2)) {
-          const bellOsc = audioCtx.createOscillator();
-          const bellGain = audioCtx.createGain();
-
-          bellOsc.type = 'sine';
-          bellOsc.frequency.setValueAtTime(glockFreq, now);
-
-          bellGain.gain.setValueAtTime(0.12, now);
-          bellGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.22);
-
-          bellOsc.connect(bellGain);
-          bellGain.connect(this.bgmGainNode);
-          this.autoCleanup(bellOsc, bellGain);
-
-          bellOsc.start(now);
-          bellOsc.stop(now + 0.23);
-        }
-
-        // 3. Harmony Pizzicato chord note (counterpoint)
-        if (harmonyFreq > 0 && stepIdx % 2 === 1) {
-          const harmOsc = audioCtx.createOscillator();
-          const harmGain = audioCtx.createGain();
-
-          harmOsc.type = 'sine';
-          harmOsc.frequency.setValueAtTime(harmonyFreq, now);
-
-          harmGain.gain.setValueAtTime(0.10, now);
-          harmGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.14);
-
-          harmOsc.connect(harmGain);
-          harmGain.connect(this.bgmGainNode);
-          this.autoCleanup(harmOsc, harmGain);
-
-          harmOsc.start(now);
-          harmOsc.stop(now + 0.15);
-        }
-
-        // 4. Upright Acoustic Bouncy Bass
+        // 2. Upright Acoustic Bouncy Bass (Every 2 beats)
         if (this.currentStep % 2 === 0 && bassFreq > 0) {
           const bassOsc = audioCtx.createOscillator();
           const bassGain = audioCtx.createGain();
@@ -716,53 +662,15 @@ class SoundEngine {
           bassOsc.frequency.setValueAtTime(bassFreq * 1.04, now);
           bassOsc.frequency.exponentialRampToValueAtTime(bassFreq, now + 0.04);
 
-          bassGain.gain.setValueAtTime(0.20, now);
-          bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          bassGain.gain.setValueAtTime(0.18, now);
+          bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
 
           bassOsc.connect(bassGain);
           bassGain.connect(this.bgmGainNode);
           this.autoCleanup(bassOsc, bassGain);
 
           bassOsc.start(now);
-          bassOsc.stop(now + 0.23);
-        }
-
-        // 5. Woodblock / Rimshot & Shaker percussion
-        if (this.currentStep % 4 === 2) {
-          // Playful woodblock pop
-          const wbOsc = audioCtx.createOscillator();
-          const wbGain = audioCtx.createGain();
-          wbOsc.type = 'sine';
-          wbOsc.frequency.setValueAtTime(1200, now);
-          wbOsc.frequency.exponentialRampToValueAtTime(600, now + 0.03);
-          wbGain.gain.setValueAtTime(0.10, now);
-          wbGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
-          wbOsc.connect(wbGain);
-          wbGain.connect(this.bgmGainNode);
-          this.autoCleanup(wbOsc, wbGain);
-          wbOsc.start(now);
-          wbOsc.stop(now + 0.04);
-        } else if (this.currentStep % 2 === 1) {
-          // Soft rhythmic shaker
-          const noise = audioCtx.createBufferSource();
-          noise.buffer = this.getNoiseBuffer(audioCtx);
-
-          const filter = audioCtx.createBiquadFilter();
-          filter.type = 'bandpass';
-          filter.frequency.setValueAtTime(8000, now);
-          filter.Q.setValueAtTime(3.0, now);
-
-          const noiseGain = audioCtx.createGain();
-          noiseGain.gain.setValueAtTime(0.06, now);
-          noiseGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.04);
-
-          noise.connect(filter);
-          filter.connect(noiseGain);
-          noiseGain.connect(this.bgmGainNode);
-          this.autoCleanup(noise, filter, noiseGain);
-
-          noise.start(now);
-          noise.stop(now + 0.045);
+          bassOsc.stop(now + 0.21);
         }
 
         this.currentStep++;
