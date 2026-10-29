@@ -164,6 +164,13 @@ class SoundEngine {
       }
     } else {
       // Returning to foreground: if BGM is enabled, restore audio and start BGM immediately!
+      if (this.bgmGainNode && this.ctx) {
+        try {
+          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+        } catch {
+          // ignore
+        }
+      }
       if (this.bgmEnabled) {
         this.resumeAndRestoreAudio().then(() => {
           if (!this.isHidden && this.bgmEnabled) {
@@ -184,9 +191,18 @@ class SoundEngine {
     const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
     const handleGesture = () => {
       // If returning to the app and BGM was supposed to be playing or enabled, resume it!
-      if (this.bgmEnabled && !this.isBgmPlaying && !this.isHidden) {
-        this.resumeAndRestoreAudio().catch(() => {});
-        this.startBgm();
+      if (this.bgmEnabled && !this.isHidden) {
+        if (this.bgmGainNode && this.ctx) {
+          try {
+            this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+          } catch {
+            // ignore
+          }
+        }
+        if (!this.isBgmPlaying || !this.ctx || this.ctx.state !== 'running') {
+          this.resumeAndRestoreAudio().catch(() => {});
+          this.startBgm();
+        }
       }
 
       // Fast path: if already active and running, zero work on gameplay touch events
@@ -197,11 +213,16 @@ class SoundEngine {
       unlockHtml5Audio();
       this.initContext();
       if (this.ctx && (this.ctx.state === 'suspended' || (this.ctx.state as string) === 'interrupted')) {
-        this.ctx.resume().then(() => {
-          if (this.bgmEnabled && !this.isBgmPlaying && !this.isHidden) {
-            this.startBgm();
-          }
-        }).catch(() => {});
+        if ((this.ctx.state as string) === 'interrupted') {
+          this.recreateContext();
+        }
+        if (this.ctx) {
+          this.ctx.resume().then(() => {
+            if (this.bgmEnabled && !this.isHidden) {
+              this.startBgm();
+            }
+          }).catch(() => {});
+        }
       }
     };
 
@@ -503,8 +524,14 @@ class SoundEngine {
     if (!this.bgmGainNode || this.bgmGainNode.context !== ctx) {
       try {
         this.bgmGainNode = ctx.createGain();
-        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, ctx.currentTime);
         this.bgmGainNode.connect(ctx.destination);
+      } catch {
+        // ignore
+      }
+    }
+    if (this.bgmGainNode) {
+      try {
+        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, ctx.currentTime);
       } catch {
         // ignore
       }
@@ -652,11 +679,15 @@ class SoundEngine {
       if (!this.bgmGainNode || this.bgmGainNode.context !== audioCtx) {
         try {
           this.bgmGainNode = audioCtx.createGain();
-          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, audioCtx.currentTime);
           this.bgmGainNode.connect(audioCtx.destination);
         } catch {
           return;
         }
+      }
+      try {
+        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, audioCtx.currentTime);
+      } catch {
+        // ignore
       }
 
       try {

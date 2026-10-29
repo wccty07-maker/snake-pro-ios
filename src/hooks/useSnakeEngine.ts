@@ -726,6 +726,7 @@ export function useSnakeEngine({
   const slowTimerRef = useRef<NodeJS.Timeout | null>(null);
   const ghostUntilRef = useRef<number>(0);
   const ghostTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pausedAtRef = useRef<number>(0);
   const isLevelClearedRef = useRef<boolean>(false);
   const levelProgressRef = useRef(levelProgress);
 
@@ -2301,6 +2302,127 @@ export function useSnakeEngine({
     setIsPaused((p) => {
       const next = typeof explicitPause === 'boolean' ? explicitPause : !p;
       isPausedRef.current = next;
+
+      if (next) {
+        // Pausing the game: record the exact timestamp paused
+        pausedAtRef.current = Date.now();
+        // Clear all active powerup timeouts so they don't fire while paused!
+        if (shieldTimerRef.current) { clearTimeout(shieldTimerRef.current); shieldTimerRef.current = null; }
+        if (slowTimerRef.current) { clearTimeout(slowTimerRef.current); slowTimerRef.current = null; }
+        if (fireTimerRef.current) { clearTimeout(fireTimerRef.current); fireTimerRef.current = null; }
+        if (magnetTimerRef.current) { clearTimeout(magnetTimerRef.current); magnetTimerRef.current = null; }
+        if (ghostTimerRef.current) { clearTimeout(ghostTimerRef.current); ghostTimerRef.current = null; }
+        if (keyAuraTimerRef.current) { clearTimeout(keyAuraTimerRef.current); keyAuraTimerRef.current = null; }
+        if (rainbowTimerRef.current) { clearTimeout(rainbowTimerRef.current); rainbowTimerRef.current = null; }
+        if (lightningTimerRef.current) { clearTimeout(lightningTimerRef.current); lightningTimerRef.current = null; }
+      } else {
+        // Resuming the game: calculate how long the game was paused and extend all active powerup end timestamps!
+        if (pausedAtRef.current > 0) {
+          const pauseDuration = Math.max(0, Date.now() - pausedAtRef.current);
+          pausedAtRef.current = 0;
+          const now = Date.now();
+
+          // Extend all active until timestamps by the exact pause duration
+          if (shieldUntilRef.current > now - pauseDuration) {
+            shieldUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, shieldUntilRef.current - now);
+            shieldTimerRef.current = setTimeout(() => {
+              if (Date.now() >= shieldUntilRef.current && Date.now() >= reviveShieldUntilRef.current) {
+                setIsShieldActive(false);
+                isShieldActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, shield: 0 }));
+              }
+            }, remaining);
+          }
+          if (reviveShieldUntilRef.current > now - pauseDuration) {
+            reviveShieldUntilRef.current += pauseDuration;
+          }
+          if (slowUntilRef.current > now - pauseDuration) {
+            slowUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, slowUntilRef.current - now);
+            slowTimerRef.current = setTimeout(() => {
+              if (Date.now() >= slowUntilRef.current) {
+                setIsSlowActive(false);
+                isSlowActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, slow: 0 }));
+              }
+            }, remaining);
+          }
+          if (fireUntilRef.current > now - pauseDuration) {
+            fireUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, fireUntilRef.current - now);
+            fireTimerRef.current = setTimeout(() => {
+              if (Date.now() >= fireUntilRef.current) {
+                setIsFireActive(false);
+                isFireActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, fire: 0 }));
+              }
+            }, remaining);
+          }
+          if (magnetUntilRef.current > now - pauseDuration) {
+            magnetUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, magnetUntilRef.current - now);
+            magnetTimerRef.current = setTimeout(() => {
+              if (Date.now() >= magnetUntilRef.current) {
+                setIsMagnetActive(false);
+                isMagnetActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, magnet: 0 }));
+              }
+            }, remaining);
+          }
+          if (ghostUntilRef.current > now - pauseDuration) {
+            ghostUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, ghostUntilRef.current - now);
+            ghostTimerRef.current = setTimeout(() => {
+              if (Date.now() >= ghostUntilRef.current) {
+                setIsGhostActive(false);
+                isGhostActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, ghost: 0 }));
+              }
+            }, remaining);
+          }
+          if (keyAuraUntilRef.current > now - pauseDuration) {
+            keyAuraUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, keyAuraUntilRef.current - now);
+            keyAuraTimerRef.current = setTimeout(() => {
+              if (Date.now() >= keyAuraUntilRef.current) {
+                setIsKeyAuraActive(false);
+                isKeyAuraActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, keyAura: 0 }));
+              }
+            }, remaining);
+          }
+          if (rainbowUntilRef.current > now - pauseDuration) {
+            rainbowUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, rainbowUntilRef.current - now);
+            rainbowTimerRef.current = setTimeout(() => {
+              if (Date.now() >= rainbowUntilRef.current) {
+                setIsRainbowActive(false);
+                isRainbowActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, rainbow: 0 }));
+              }
+            }, remaining);
+          }
+          if (lightningUntilRef.current > now - pauseDuration) {
+            lightningUntilRef.current += pauseDuration;
+            const remaining = Math.max(0, lightningUntilRef.current - now);
+            lightningTimerRef.current = setTimeout(() => {
+              if (Date.now() >= lightningUntilRef.current) {
+                setIsLightningActive(false);
+                isLightningActiveRef.current = false;
+                setPowerUpTimeLeft((prev) => ({ ...prev, lightning: 0 }));
+              }
+            }, remaining);
+          }
+          if (spawnGraceUntilRef.current > now - pauseDuration) {
+            spawnGraceUntilRef.current += pauseDuration;
+          }
+          if (isFullyIlluminatedUntilRef.current > now - pauseDuration) {
+            isFullyIlluminatedUntilRef.current += pauseDuration;
+          }
+        }
+      }
+
       return next;
     });
   }, []);

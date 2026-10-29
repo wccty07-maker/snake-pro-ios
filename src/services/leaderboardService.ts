@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -288,6 +289,90 @@ export async function deleteAllPlayerScoresFromLeaderboard(
  * @param onError 發生錯誤時的回調函數
  * @returns 取消訂閱函數 (Unsubscribe)
  */
+export const SEED_LEADERBOARDS: Record<LeaderboardMode, { username: string; score: number }[]> = {
+  Missions: [
+    { username: 'chaXG9DhWdq14VitgxWmJn', score: 4350 },
+    { username: '顽皮灵蛇#1927', score: 4185 },
+    { username: 'eZIm7pYOtAPVBLngvL1rlA', score: 3250 },
+    { username: 'SugarSnake#9916', score: 2460 },
+    { username: '宇宙飛龍#7204', score: 1970 },
+    { username: '布丁小蛇#1306', score: 1835 },
+    { username: 'dk_Hl2WM4fVZy3jN6UnPi-', score: 1730 },
+    { username: 'DDD', score: 1660 },
+    { username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 1250 },
+    { username: '琥珀怪獸#8738', score: 1130 },
+    { username: 'cThOk2rgz4IFkekf-IKGOU', score: 1120 },
+    { username: 'cE6Gb44PJX6Vl5NrapfUrj', score: 1120 },
+    { username: 'MagicSerpent#560', score: 1070 },
+    { username: 'exZ96wXY7YIYmxraqUuvmj', score: 1010 },
+    { username: 'SwiftDino#8871', score: 1000 },
+    { username: 'dXu3FNAI_SLB90iPCkMPLy', score: 1000 },
+    { username: '32111', score: 990 },
+    { username: 'Monster', score: 980 },
+    { username: 'f83nNYmf5l35DeQ5K524aJ', score: 950 },
+    { username: '貪食蛇王者', score: 930 },
+  ],
+  Classic: [
+    { username: '顽皮灵蛇#1927', score: 3340 },
+    { username: '宇宙飛龍#7204', score: 2420 },
+    { username: 'PixelDino#7508', score: 1930 },
+    { username: 'SwiftDino#8871', score: 1000 },
+    { username: 'FrostyDino#2041', score: 420 },
+    { username: '布丁小蛇#1306', score: 260 },
+    { username: '123 abc', score: 170 },
+    { username: '怪獸萌蛇王', score: 10 },
+  ],
+  Time: [
+    { username: '顽皮灵蛇#1927', score: 2550 },
+    { username: '宇宙飛龍#7204', score: 2100 },
+    { username: '123 abc', score: 1790 },
+    { username: '怪獸萌蛇王', score: 940 },
+    { username: '布丁小蛇#1306', score: 510 },
+    { username: 'PixelDino#7508', score: 140 },
+  ],
+};
+
+/**
+ * 取得指定模式的即時本地/快取榮譽榜種子數據，杜絕網絡建立前排行榜只顯示玩家自己的問題
+ */
+export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): FirestoreLeaderboardEntry[] {
+  const targetMode = normalizeMode(mode);
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem(`snake_pro_top20_cache_${targetMode}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const seeds = SEED_LEADERBOARDS[targetMode] || SEED_LEADERBOARDS.Missions;
+  return seeds.map((s, idx) => ({
+    id: `seed_${targetMode}_${idx}`,
+    userId: s.username,
+    username: s.username,
+    score: s.score,
+    mode: targetMode,
+    rank: idx + 1,
+    formattedDate: '雲端記錄',
+    isCurrentPlayer: false,
+  }));
+}
+
+/**
+ * 監聽指定模式的前 20 名排行榜資料 (即時更新)
+ * 查詢條件：where('mode', '==', currentMode).orderBy('score', 'desc').limit(20)
+ *
+ * @param mode 欲查詢的模式 ('Classic' | 'Missions' | 'Time')
+ * @param onUpdate 成功獲取更新時的回調函數
+ * @param onError 發生錯誤時的回調函數
+ * @returns 取消訂閱函數 (Unsubscribe)
+ */
 export function subscribeToTop20Leaderboard(
   mode: LeaderboardMode | GameMode | string,
   onUpdate: (entries: FirestoreLeaderboardEntry[], currentPlayerRank: number | null) => void,
@@ -304,43 +389,69 @@ export function subscribeToTop20Leaderboard(
     limit(20)
   );
 
+  const parseAndNotify = (docs: any[]) => {
+    let playerRank: number | null = null;
+    const entries: FirestoreLeaderboardEntry[] = [];
+
+    docs.forEach((docSnap, index) => {
+      const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap;
+      const rank = index + 1;
+      const entryUserId = data.userId || (docSnap.id ? docSnap.id.replace(`_${targetMode}`, '') : `player_${rank}`);
+      const isCurrent = entryUserId === currentUserId;
+
+      if (isCurrent) {
+        playerRank = rank;
+      }
+
+      // 格式化時間
+      let formattedDate = '剛剛';
+      if (data.updatedAt instanceof Timestamp) {
+        const date = data.updatedAt.toDate();
+        formattedDate = date.toLocaleDateString();
+      }
+
+      entries.push({
+        id: docSnap.id || `entry_${entryUserId}`,
+        userId: entryUserId,
+        username: data.username || entryUserId,
+        score: Number(data.score) || 0,
+        mode: targetMode,
+        rank,
+        updatedAt: (data.updatedAt as Timestamp) || null,
+        formattedDate,
+        isCurrentPlayer: isCurrent,
+      });
+    });
+
+    if (entries.length > 0) {
+      try {
+        localStorage.setItem(`snake_pro_top20_cache_${targetMode}`, JSON.stringify(entries));
+      } catch {
+        // ignore
+      }
+    }
+
+    onUpdate(entries, playerRank);
+  };
+
+  // 1. 立即以標準 HTTPS getDocs 發送直接請求，在手機端秒級完成數據載入
+  getDocs(leaderboardQuery)
+    .then((snap) => {
+      if (snap && snap.docs && snap.docs.length > 0) {
+        parseAndNotify(snap.docs);
+      }
+    })
+    .catch((err) => {
+      console.warn(`[Firestore] ${targetMode} getDocs 直接請求備援:`, err);
+    });
+
+  // 2. 同步啟動 onSnapshot 實時長輪詢監聽
   const unsubscribe = onSnapshot(
     leaderboardQuery,
     (snapshot) => {
-      let playerRank: number | null = null;
-      const entries: FirestoreLeaderboardEntry[] = [];
-
-      snapshot.docs.forEach((docSnap, index) => {
-        const data = docSnap.data();
-        const rank = index + 1;
-        const entryUserId = data.userId || docSnap.id.replace(`_${targetMode}`, '');
-        const isCurrent = entryUserId === currentUserId;
-
-        if (isCurrent) {
-          playerRank = rank;
-        }
-
-        // 格式化時間
-        let formattedDate = '剛剛';
-        if (data.updatedAt instanceof Timestamp) {
-          const date = data.updatedAt.toDate();
-          formattedDate = date.toLocaleDateString();
-        }
-
-        entries.push({
-          id: docSnap.id,
-          userId: entryUserId,
-          username: entryUserId,
-          score: Number(data.score) || 0,
-          mode: targetMode,
-          rank,
-          updatedAt: (data.updatedAt as Timestamp) || null,
-          formattedDate,
-          isCurrentPlayer: isCurrent,
-        });
-      });
-
-      onUpdate(entries, playerRank);
+      if (snapshot && snapshot.docs) {
+        parseAndNotify(snapshot.docs);
+      }
     },
     (error) => {
       const isPermission =

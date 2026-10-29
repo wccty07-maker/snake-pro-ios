@@ -10,6 +10,7 @@ import {
   syncAllLocalHighScores,
   getPlayerCloudScore,
   deletePlayerScore,
+  getInitialLeaderboardEntries,
 } from '../services/leaderboardService';
 import { soundEngine } from '../utils/audio';
 import { SupportedLanguage, getTranslation } from '../utils/i18n';
@@ -61,8 +62,10 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
 
   const playerFid = getOrCreatePlayerId();
 
-  // Firestore 即時排行榜狀態
-  const [entries, setEntries] = useState<FirestoreLeaderboardEntry[]>([]);
+  // Firestore 即時排行榜狀態 (預設載入榮譽榜名單，杜絕只顯示自己一人的問題)
+  const [entries, setEntries] = useState<FirestoreLeaderboardEntry[]>(() =>
+    getInitialLeaderboardEntries(initialMode || 'Missions')
+  );
   const [playerRank, setPlayerRank] = useState<number | null>(null);
   const [playerCloudScore, setPlayerCloudScore] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -76,8 +79,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
   // 每次打開排行榜時，預設顯示『闖關』模式
   useEffect(() => {
     if (isOpen) {
-      setActiveMode(initialMode ? normalizeMode(initialMode) : 'Missions');
-      setEntries([]);
+      const mode = initialMode ? normalizeMode(initialMode) : 'Missions';
+      setActiveMode(mode);
+      setEntries(getInitialLeaderboardEntries(mode));
       setPlayerRank(null);
       setPlayerCloudScore(null);
     }
@@ -231,7 +235,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
   const handleTabChange = (mode: LeaderboardMode) => {
     soundEngine.playClick();
     setActiveMode(mode);
-    setEntries([]); // 立即清空，防止切換標籤時因非同步前一模式名單洩漏自己的紀錄
+    setEntries(getInitialLeaderboardEntries(mode));
     setPlayerRank(null);
     setPlayerCloudScore(null);
     setIsLoading(true);
