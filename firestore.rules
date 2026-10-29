@@ -1,36 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Leaderboard collection rules
     match /leaderboard/{entryId} {
-      // Allow reading top scores publicly
-      allow read: if true;
-
-      // Allow creating score entry with valid mode, username, and score
-      allow create: if request.resource.data.username is string
-        && request.resource.data.username.size() > 0
-        && request.resource.data.username.size() <= 128
-        && request.resource.data.score is number
-        && request.resource.data.score >= 0
-        && request.resource.data.mode is string
-        && (request.resource.data.mode == 'Classic' || request.resource.data.mode == 'Missions' || request.resource.data.mode == 'Time');
-
-      // Allow updating high score: valid score and mode
-      allow update: if request.resource.data.username is string
-        && request.resource.data.username.size() > 0
-        && request.resource.data.username.size() <= 128
-        && request.resource.data.score is number
-        && request.resource.data.score >= 0
-        && request.resource.data.mode is string
-        && (request.resource.data.mode == 'Classic' || request.resource.data.mode == 'Missions' || request.resource.data.mode == 'Time');
-
-      // Allow deleting document (GDPR / right to be forgotten)
-      allow delete: if true;
+      allow read, write: if true;
     }
-
-    // Default deny for all other collections
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+

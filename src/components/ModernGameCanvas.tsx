@@ -159,12 +159,25 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     onDirectionChangeRef.current = onDirectionChange;
   }, [onDirectionChange]);
 
+  const isPausedRef = useRef(isPaused);
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
   // Direct native non-passive touch listeners (Eliminates iOS Safari 100ms gesture disambiguation delay!)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const onNativeTouchStart = (e: TouchEvent) => {
+      // If paused or touching an interactive button/link, allow default touch behavior completely!
+      if (isPausedRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const elem = target instanceof Element ? target : (target as any)?.parentElement;
+        if (elem?.closest?.('button, [role="button"], a, input')) return;
+      }
+
       if (e.touches.length !== 1) return;
       if (e.cancelable) e.preventDefault();
       const touch = e.touches[0];
@@ -187,6 +200,13 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     };
 
     const onNativeTouchMove = (e: TouchEvent) => {
+      if (isPausedRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const elem = target instanceof Element ? target : (target as any)?.parentElement;
+        if (elem?.closest?.('button, [role="button"], a, input')) return;
+      }
+
       if (!touchStartPosRef.current || e.touches.length !== 1) return;
       if (e.cancelable) e.preventDefault();
       const touch = e.touches[0];
@@ -235,6 +255,13 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     };
 
     const onNativeTouchEnd = (e: TouchEvent) => {
+      if (isPausedRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const elem = target instanceof Element ? target : (target as any)?.parentElement;
+        if (elem?.closest?.('button, [role="button"], a, input')) return;
+      }
+
       const endTouch = e.changedTouches[0];
       touchStartRef.current = null;
       swipeTriggeredDirRef.current = null;
@@ -2766,31 +2793,33 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
                   <button
                     type="button"
                     id="btn-pause-resume"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       soundEngine.playResume();
                       if (onTogglePause) onTogglePause();
                     }}
-                    className="w-full py-3 px-4 rounded-xl min-h-[44px] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+                    className="w-full py-3 px-4 rounded-xl min-h-[48px] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer touch-manipulation select-none"
                   >
-                    <Play className="w-4 h-4 fill-slate-950 text-slate-950" />
-                    <span>{getTranslation('resumeGame', language)}</span>
+                    <Play className="w-4 h-4 fill-slate-950 text-slate-950 pointer-events-none" />
+                    <span className="pointer-events-none">{getTranslation('resumeGame', language)}</span>
                   </button>
 
                   {/* 2. 重新開始 (Restart) - 扣 1 心 */}
                   <button
                     type="button"
                     id="btn-pause-restart"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       soundEngine.playClick();
                       if (onRestart) onRestart();
                     }}
-                    className="w-full py-3 px-4 rounded-xl min-h-[44px] bg-slate-800 hover:bg-slate-750 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs flex items-center justify-between active:scale-95 transition-all cursor-pointer"
+                    className="w-full py-3 px-4 rounded-xl min-h-[48px] bg-slate-800 hover:bg-slate-750 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs flex items-center justify-between active:scale-95 transition-all cursor-pointer touch-manipulation select-none"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 pointer-events-none">
                       <RotateCcw className="w-4 h-4 text-amber-400" />
                       <span>{getTranslation('restartGame', language)}</span>
                     </div>
-                    <span className="text-[11px] font-black text-rose-300 bg-rose-950/70 border border-rose-500/50 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0">
+                    <span className="text-[11px] font-black text-rose-300 bg-rose-950/70 border border-rose-500/50 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 pointer-events-none">
                       -1 ❤️
                     </span>
                   </button>
@@ -2799,17 +2828,18 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
                   <button
                     type="button"
                     id="btn-pause-quit"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       soundEngine.playClick();
                       if (onQuit) onQuit();
                     }}
-                    className="w-full py-3 px-4 rounded-xl min-h-[44px] bg-slate-800/80 hover:bg-rose-950/30 border border-slate-700/80 hover:border-rose-500/50 text-slate-300 hover:text-rose-300 font-bold text-xs flex items-center justify-between active:scale-95 transition-all cursor-pointer"
+                    className="w-full py-3 px-4 rounded-xl min-h-[48px] bg-slate-800/80 hover:bg-rose-950/30 border border-slate-700/80 hover:border-rose-500/50 text-slate-300 hover:text-rose-300 font-bold text-xs flex items-center justify-between active:scale-95 transition-all cursor-pointer touch-manipulation select-none"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 pointer-events-none">
                       <Home className="w-4 h-4 text-slate-400" />
                       <span>{getTranslation('quitGame', language)}</span>
                     </div>
-                    <span className="text-[11px] font-black text-rose-300 bg-rose-950/70 border border-rose-500/50 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0">
+                    <span className="text-[11px] font-black text-rose-300 bg-rose-950/70 border border-rose-500/50 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 pointer-events-none">
                       -1 ❤️
                     </span>
                   </button>

@@ -14,6 +14,7 @@ import {
 } from './utils/gameData';
 import { LEVEL_MISSIONS, getLocalizedLevel } from './utils/levelsData';
 import { soundEngine } from './utils/audio';
+import { App as CapApp } from '@capacitor/app';
 import { detectSystemLanguage } from './utils/i18n';
 import { calculateHearts } from './utils/hearts';
 import { useSnakeEngine } from './hooks/useSnakeEngine';
@@ -597,6 +598,26 @@ export default function App() {
     soundEngine.setSoundEnabled(profile.soundEnabled);
     soundEngine.setBgmEnabled(profile.bgmEnabled ?? true);
   }, [profile.soundEnabled, profile.bgmEnabled]);
+
+  // Native iOS Capacitor background / foreground bridge
+  useEffect(() => {
+    let handle: any = null;
+    try {
+      CapApp.addListener('appStateChange', (state) => {
+        soundEngine.handleVisibilityOrFocusChange(state.isActive);
+      }).then((res) => {
+        handle = res;
+      }).catch(() => {});
+    } catch {
+      // Running in standard web browser
+    }
+
+    return () => {
+      if (handle && typeof handle.remove === 'function') {
+        handle.remove();
+      }
+    };
+  }, []);
 
   // Heart notification toast state
   const [heartNotice, setHeartNotice] = useState<string | null>(null);

@@ -136,9 +136,18 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     setErrorMessage(null);
     setIndexUrl(null);
 
+    // Mobile safety: After 800ms, if Firestore snapshot hasn't resolved yet,
+    // stop the spinner so the player's local records and rank #1 champion badge show immediately!
+    const safetyTimeout = setTimeout(() => {
+      if (isSubscribed) {
+        setIsLoading(false);
+      }
+    }, 800);
+
     const unsubscribe = subscribeToTop20Leaderboard(
       activeMode,
       (newEntries, currentRank) => {
+        clearTimeout(safetyTimeout);
         if (!isSubscribed) return;
         // 安全防護：若玩家尚未玩過該模式，過濾掉任何舊版誤寫入的自己個人紀錄
         const sanitizedEntries = isCurrentModeUnplayed
@@ -172,6 +181,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
         }
       },
       (err) => {
+        clearTimeout(safetyTimeout);
         if (!isSubscribed) return;
         console.warn(`[Firestore] ${activeMode} 模式排行榜載入錯誤:`, err);
         setIsLoading(false);
@@ -212,6 +222,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
 
     return () => {
       isSubscribed = false;
+      clearTimeout(safetyTimeout);
       unsubscribe();
     };
   }, [isOpen, activeMode, language, retryCount]);
@@ -543,6 +554,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                 ? 'TOP 20 ランキング'
                 : '前 20 名最高分排名'}
             </span>
+            {isLoading && (
+              <RefreshCw className="w-3 h-3 text-amber-400 animate-spin ml-1 inline-block shrink-0" />
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
@@ -559,7 +573,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
 
         {/* Leaderboard Content List */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-3 space-y-1.5">
-          {isLoading ? (
+          {isLoading && displayEntries.length === 0 ? (
             <div className="py-14 flex flex-col items-center justify-center gap-3 text-slate-400">
               <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
             </div>
