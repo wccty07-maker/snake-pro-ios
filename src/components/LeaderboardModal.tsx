@@ -24,7 +24,18 @@ import {
   RefreshCw,
   AlertCircle,
   ExternalLink,
+  Copy,
+  Check,
 } from 'lucide-react';
+
+export const FIRESTORE_RECOMMENDED_RULES = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /leaderboard/{entryId} {
+      allow read, write: if true;
+    }
+  }
+}`;
 
 interface LeaderboardModalProps {
   isOpen: boolean;
@@ -59,6 +70,8 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
   const [indexUrl, setIndexUrl] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [retryCount, setRetryCount] = useState<number>(0);
+  const [showRulesGuide, setShowRulesGuide] = useState<boolean>(false);
+  const [rulesCopied, setRulesCopied] = useState<boolean>(false);
 
   // 每次打開排行榜時，預設顯示『闖關』模式
   useEffect(() => {
@@ -550,70 +563,76 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
             <div className="py-14 flex flex-col items-center justify-center gap-3 text-slate-400">
               <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
             </div>
-          ) : errorMessage ? (
-            <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-center space-y-2.5">
-              <AlertCircle className="w-6 h-6 text-amber-400 mx-auto" />
-              <div className="text-xs text-amber-200 font-medium">{errorMessage}</div>
-              {indexUrl ? (
-                <a
-                  href={indexUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md mt-2"
-                >
-                  <span>
-                    {language === 'en'
-                      ? 'Create Firebase Composite Index'
-                      : language === 'ja'
-                      ? 'Firebase複合インデックスを作成'
-                      : language === 'zh-CN'
-                      ? '前往建立 Firebase 复合索引'
-                      : '前往建立 Firebase 複合索引'}
-                  </span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setIsLoading(true);
-                    setErrorMessage(null);
-                    setRetryCount((c) => c + 1);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold border border-amber-500/30 transition-all active:scale-95 cursor-pointer mt-1"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>{language === 'en' ? 'Retry' : language === 'ja' ? '再試行' : '重新整理'}</span>
-                </button>
+          ) : displayEntries.length > 0 ? (
+            <>
+              {errorMessage && (
+                <div className="p-3 mb-2 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-xs text-amber-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        {language === 'en'
+                          ? 'Local Records Active (Cloud Rules Pending)'
+                          : language === 'ja'
+                          ? 'ローカル記録表示中（クラウド同期設定待ち）'
+                          : '本地榮譽榜已載入 (雲端規則待發布)'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRulesGuide((v) => !v)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] border border-amber-500/30 transition-all cursor-pointer"
+                    >
+                      {showRulesGuide
+                        ? language === 'en'
+                          ? 'Hide Guide'
+                          : '收起教學'
+                        : language === 'en'
+                        ? 'Setup Guide'
+                        : '查看發布教學'}
+                    </button>
+                  </div>
+
+                  {showRulesGuide && (
+                    <div className="pt-2 border-t border-amber-500/20 space-y-2 text-[11px] text-slate-300">
+                      <p>
+                        {language === 'en'
+                          ? 'To enable global multiplayer rankings, paste the rule below in Firebase Console (Firestore -> Rules) and click Publish:'
+                          : '如需開啟全球多人連線排行榜，請在 Firebase Console 控制台 (Firestore Database -> Rules 規則) 貼上以下規則並按「發布 (Publish)」：'}
+                      </p>
+                      <pre className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-mono text-emerald-400 overflow-x-auto select-all">
+                        {FIRESTORE_RECOMMENDED_RULES}
+                      </pre>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(FIRESTORE_RECOMMENDED_RULES);
+                            soundEngine.playClick();
+                            setRulesCopied(true);
+                            setTimeout(() => setRulesCopied(false), 2500);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        >
+                          {rulesCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{rulesCopied ? (language === 'en' ? 'Copied!' : '已複製！') : (language === 'en' ? 'Copy Rule' : '一鍵複製規則代碼')}</span>
+                        </button>
+                        <a
+                          href="https://console.firebase.google.com/project/snake-pro-c1187/firestore/rules"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                        >
+                          <span>{language === 'en' ? 'Open Firebase Console' : '前往 Firebase 控制台'}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
-          ) : displayEntries.length === 0 ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center p-4">
-              <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-2xl mb-2">
-                🏆
-              </div>
-              <div className="text-sm font-bold text-white">
-                {language === 'en'
-                  ? `No rankings in ${activeMode === 'Classic' ? 'Classic' : activeMode === 'Missions' ? 'Missions' : 'Time Attack'} mode yet`
-                  : language === 'ja'
-                  ? `現在『${activeMode === 'Classic' ? 'クラシック' : activeMode === 'Missions' ? 'ステージ' : 'タイム'}』モードの記録はありません`
-                  : language === 'zh-CN'
-                  ? `目前『${activeMode === 'Classic' ? '经典' : activeMode === 'Missions' ? '闯关' : '计时'}』模式尚无排名`
-                  : `目前『${activeMode === 'Classic' ? '經典' : activeMode === 'Missions' ? '闖關' : '計時'}』模式尚無排名`}
-              </div>
-              <div className="text-xs text-slate-400 mt-1 max-w-xs">
-                {language === 'en'
-                  ? 'Play a round in this mode to submit your score automatically!'
-                  : language === 'ja'
-                  ? 'このモードをプレイすると、ハイスコアが自動でランキングに反映されます！'
-                  : language === 'zh-CN'
-                  ? '只要在该模式完成一局游戏，最高分就会自动提交至排行榜！'
-                  : '只要在該模式完成一局遊戲，最高分就會自動提交至排行榜！'}
-              </div>
-            </div>
-          ) : (
-            displayEntries.map((entry) => {
+
+              {displayEntries.map((entry) => {
               const displayFid = (() => {
                 if (entry.isCurrentPlayer) return playerFid;
                 const rawId = (entry.userId || '').trim();
@@ -717,8 +736,118 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                   </div>
                 </div>
               );
-            })
-          )}
+            })}
+          </>
+        ) : errorMessage ? (
+          <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-center space-y-2.5">
+            <AlertCircle className="w-6 h-6 text-amber-400 mx-auto" />
+            <div className="text-xs text-amber-200 font-medium">{errorMessage}</div>
+            {indexUrl ? (
+              <a
+                href={indexUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md mt-2"
+              >
+                <span>
+                  {language === 'en'
+                    ? 'Create Firebase Composite Index'
+                    : language === 'ja'
+                    ? 'Firebase複合インデックスを作成'
+                    : language === 'zh-CN'
+                    ? '前往建立 Firebase 复合索引'
+                    : '前往建立 Firebase 複合索引'}
+                </span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsLoading(true);
+                      setErrorMessage(null);
+                      setRetryCount((c) => c + 1);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold border border-amber-500/30 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>{language === 'en' ? 'Retry' : language === 'ja' ? '再試行' : '重新整理'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowRulesGuide((v) => !v)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold border border-amber-500/30 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <span>{showRulesGuide ? (language === 'en' ? 'Hide Guide' : '收起教學') : (language === 'en' ? 'Setup Guide' : '查看發布教學')}</span>
+                  </button>
+                </div>
+                {showRulesGuide && (
+                  <div className="pt-2 border-t border-amber-500/20 space-y-2 text-[11px] text-slate-300 text-left">
+                    <p>
+                      {language === 'en'
+                        ? 'To enable global multiplayer rankings, paste the rule below in Firebase Console (Firestore -> Rules) and click Publish:'
+                        : '如需開啟全球多人連線排行榜，請在 Firebase Console 控制台 (Firestore Database -> Rules 規則) 貼上以下規則並按「發布 (Publish)」：'}
+                    </p>
+                    <pre className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-mono text-emerald-400 overflow-x-auto select-all">
+                      {FIRESTORE_RECOMMENDED_RULES}
+                    </pre>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(FIRESTORE_RECOMMENDED_RULES);
+                          soundEngine.playClick();
+                          setRulesCopied(true);
+                          setTimeout(() => setRulesCopied(false), 2500);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        {rulesCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{rulesCopied ? (language === 'en' ? 'Copied!' : '已複製！') : (language === 'en' ? 'Copy Rule' : '一鍵複製規則代碼')}</span>
+                      </button>
+                      <a
+                        href="https://console.firebase.google.com/project/snake-pro-c1187/firestore/rules"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                      >
+                        <span>{language === 'en' ? 'Open Firebase Console' : '前往 Firebase 控制台'}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="py-12 flex flex-col items-center justify-center text-center p-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-2xl mb-2">
+              🏆
+            </div>
+            <div className="text-sm font-bold text-white">
+              {language === 'en'
+                ? `No rankings in ${activeMode === 'Classic' ? 'Classic' : activeMode === 'Missions' ? 'Missions' : 'Time Attack'} mode yet`
+                : language === 'ja'
+                ? `現在『${activeMode === 'Classic' ? 'クラシック' : activeMode === 'Missions' ? 'ステージ' : 'タイム'}』モードの記録はありません`
+                : language === 'zh-CN'
+                ? `目前『${activeMode === 'Classic' ? '经典' : activeMode === 'Missions' ? '闯关' : '计时'}』模式尚无排名`
+                : `目前『${activeMode === 'Classic' ? '經典' : activeMode === 'Missions' ? '闖關' : '計時'}』模式尚無排名`}
+            </div>
+            <div className="text-xs text-slate-400 mt-1 max-w-xs">
+              {language === 'en'
+                ? 'Play a round in this mode to submit your score automatically!'
+                : language === 'ja'
+                ? 'このモードをプレイすると、ハイスコアが自動でランキングに反映されます！'
+                : language === 'zh-CN'
+                ? '只要在该模式完成一局游戏，最高分就会自动提交至排行榜！'
+                : '只要在該模式完成一局遊戲，最高分就會自動提交至排行榜！'}
+            </div>
+          </div>
+        )}
         </div>
       </CuteModalBackground>
     </div>

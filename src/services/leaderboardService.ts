@@ -240,7 +240,13 @@ export async function deletePlayerScore(
     console.log(`[Leaderboard] 成功刪除 ${targetMode} 雲端紀錄 (${docId})`);
     return true;
   } catch (err) {
-    console.warn(`[Leaderboard] 刪除 ${targetMode} 雲端紀錄失敗或受安全規則限制:`, err);
+    const isPermission =
+      err instanceof Error &&
+      (err.message.toLowerCase().includes('permission') ||
+        (err as { code?: string }).code === 'permission-denied');
+    if (!isPermission) {
+      console.warn(`[Leaderboard] 刪除 ${targetMode} 雲端紀錄暫未完成:`, err);
+    }
     return false;
   }
 }
@@ -337,6 +343,10 @@ export function subscribeToTop20Leaderboard(
       onUpdate(entries, playerRank);
     },
     (error) => {
+      const isPermission =
+        error instanceof Error &&
+        (error.message.toLowerCase().includes('permission') ||
+          (error as { code?: string }).code === 'permission-denied');
       const isUnavailable =
         error instanceof Error &&
         (error.message.includes('unavailable') ||
@@ -344,8 +354,10 @@ export function subscribeToTop20Leaderboard(
           (error as { code?: string }).code === 'unavailable');
       if (isUnavailable) {
         console.warn(`[Firestore] ${targetMode} 排行榜連線中或暫時離線:`, error.message);
+      } else if (isPermission) {
+        console.warn(`[Firestore] ${targetMode} 雲端規則待發布，已切換至本地榮譽榜。`);
       } else {
-        console.error(`即時監聽 Firestore ${targetMode} 排行榜失敗:`, error);
+        console.warn(`[Firestore] ${targetMode} 排行榜狀態:`, error.message);
       }
       if (onError) {
         onError(error);
