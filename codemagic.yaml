@@ -14,12 +14,10 @@ workflows:
       - name: Install Node Dependencies
         script: |
           npm install --legacy-peer-deps
-          # Install macOS arm64 native binaries
           OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
           LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
           ROLLDOWN_VER=$(node -p "require('./node_modules/rolldown/package.json').version" 2>/dev/null || echo "1.2.9")
           npm install @tailwindcss/oxide-darwin-arm64@$OXIDE_VER lightningcss-darwin-arm64@$LIGHTNING_VER @rolldown/binding-darwin-arm64@$ROLLDOWN_VER @esbuild/darwin-arm64 @resvg/resvg-js-darwin-arm64 --no-save
-
           node scripts/patch-capacitor.js || true
 
       - name: Build Web Application
@@ -49,6 +47,14 @@ workflows:
 
       - name: Build Signed IPA with Fastlane
         script: |
+          echo "=== Verifying Credentials in Environment ==="
+          echo "APP_STORE_KEY_ID: ${APP_STORE_KEY_ID:-[EMPTY]}"
+          echo "APP_STORE_ISSUER_ID: ${APP_STORE_ISSUER_ID:-[EMPTY]}"
+          if [ -n "$APP_STORE_PRIVATE_KEY" ]; then
+            echo "APP_STORE_PRIVATE_KEY length: ${#APP_STORE_PRIVATE_KEY} chars"
+          else
+            echo "APP_STORE_PRIVATE_KEY: [EMPTY]"
+          fi
           cd ios/App
           fastlane build_signed_ipa
 
