@@ -1,0 +1,69 @@
+workflows:
+  ios-release:
+    name: iOS Build & TestFlight Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      node: 22
+      xcode: 16.0
+      groups:
+        - app_store_credentials
+      vars:
+        APPLE_TEAM_ID: "N2S5289QDM"
+    scripts:
+      - name: Install Node Dependencies
+        script: |
+          npm install --legacy-peer-deps
+          # Install macOS arm64 native binaries
+          OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
+          LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
+          ROLLDOWN_VER=$(node -p "require('./node_modules/rolldown/package.json').version" 2>/dev/null || echo "1.2.9")
+          npm install @tailwindcss/oxide-darwin-arm64@$OXIDE_VER lightningcss-darwin-arm64@$LIGHTNING_VER @rolldown/binding-darwin-arm64@$ROLLDOWN_VER @esbuild/darwin-arm64 @resvg/resvg-js-darwin-arm64 --no-save
+
+          node scripts/patch-capacitor.js || true
+
+      - name: Build Web Application
+        script: |
+          npx vite build
+
+      - name: Prepare & Sync iOS Native Project
+        script: |
+          npx cap sync ios
+          mkdir -p ios/App/App/public
+          rm -rf ios/App/App/public/*
+          cp -r dist/* ios/App/App/public/
+
+      - name: Install Fastlane & Tools
+        script: |
+          gem install fastlane --no-document
+          pip3 install pillow --quiet || true
+
+      - name: Patch Xcode Project Signing
+        script: |
+          RUN_NUM="${BUILD_NUMBER:-10}"
+          OFFSET=10
+          CALCULATED_BUILD=$(( RUN_NUM + OFFSET ))
+          export BUILD_NUMBER=$CALCULATED_BUILD
+          echo "Calculated Build Number: $CALCULATED_BUILD"
+          python3 scripts/patch-xcode-signing.py ios/App/App.xcodeproj/project.pbxproj "${APPLE_TEAM_ID:-N2S5289QDM}" "elemall.snakegame.1 AppStore 1793016646" "$CALCULATED_BUILD"
+
+      - name: Build Signed IPA with Fastlane
+        script: |
+          cd ios/App
+          fastlane build_signed_ipa
+
+      - name: Patch IPA (iOS 26 SDK, Xcode 26 & Clean App Icons)
+        script: |
+          KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain-db"
+          if [ ! -f "$KEYCHAIN_PATH" ]; then
+            KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain"
+          fi
+          python3 scripts/patch-ipa.py build/SnakePro.ipa "$KEYCHAIN_PATH"
+
+      - name: Upload Patched IPA to TestFlight
+        script: |
+          cd ios/App
+          fastlane upload_ipa
+
+    artifacts:
+      - build/SnakePro.ipa
