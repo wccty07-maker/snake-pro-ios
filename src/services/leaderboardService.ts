@@ -254,27 +254,63 @@ export async function deletePlayerScore(
 
 /**
  * 一鍵徹底清除玩家在 Firestore 雲端排行榜的所有模式數據與暱稱 (符合 GDPR / 隱私刪除請求)
- * 並銷毀舊 FID 向 Firebase 重新申請全新 Installation ID
+ * 1. 刪除玩家在 Classic, Missions, Time 模式的直接文檔與關聯查詢文檔
+ * 2. 清除本機排行榜快取 (snake_pro_top20_cache_*)
+ * 3. 銷毀舊 FID 並向 Firebase 重新申請全新 Installation ID
  */
 export async function deleteAllPlayerScoresFromLeaderboard(
   userId?: string
 ): Promise<{ success: boolean; modesDeleted: LeaderboardMode[]; newFid: string }> {
-  const currentUserId = userId?.trim() || getOrCreatePlayerId();
+  const currentUserId = (userId?.trim() || getOrCreatePlayerId() || '').trim();
   const modes: LeaderboardMode[] = ['Classic', 'Missions', 'Time'];
   const deleted: LeaderboardMode[] = [];
 
-  await Promise.all(
-    modes.map(async (m) => {
-      try {
-        const ok = await deletePlayerScore(currentUserId, m);
-        if (ok) deleted.push(m);
-      } catch {
-        // ignore
-      }
-    })
-  );
+  if (currentUserId) {
+    // 1. 直接依文檔 ID `${currentUserId}_${mode}` 刪除
+    await Promise.all(
+      modes.map(async (m) => {
+        try {
+          const docRef = doc(db, COLLECTION_NAME, `${currentUserId}_${m}`);
+          await deleteDoc(docRef);
+          deleted.push(m);
+        } catch {
+          // ignore
+        }
+      })
+    );
 
-  // 銷毀舊 FID 並重新生成全新 Firebase Installation ID
+    // 2. 廣域查詢：凡 userId 或 username 為此 ID 的文檔一併清除，防止早期殘留或別名紀錄
+    try {
+      const qUser = query(collection(db, COLLECTION_NAME), where('userId', '==', currentUserId));
+      const snapUser = await getDocs(qUser);
+      const deletesUser = snapUser.docs.map((d) => deleteDoc(d.ref).catch(() => {}));
+      await Promise.all(deletesUser);
+    } catch {
+      // ignore
+    }
+
+    try {
+      const qName = query(collection(db, COLLECTION_NAME), where('username', '==', currentUserId));
+      const snapName = await getDocs(qName);
+      const deletesName = snapName.docs.map((d) => deleteDoc(d.ref).catch(() => {}));
+      await Promise.all(deletesName);
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. 清除所有本機排行榜 localStorage 快取，防止重開排行時舊紀錄仍從快取閃爍顯示
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('snake_pro_top20_cache_Classic');
+      localStorage.removeItem('snake_pro_top20_cache_Missions');
+      localStorage.removeItem('snake_pro_top20_cache_Time');
+    } catch {
+      // ignore
+    }
+  }
+
+  // 4. 銷毀舊 FID 並重新生成全新 Firebase Installation ID
   const newFid = await resetFirebaseInstallationId();
 
   return { success: true, modesDeleted: deleted, newFid };
@@ -305,7 +341,7 @@ export const SEED_LEADERBOARDS: Record<LeaderboardMode, SeedEntry[]> = {
     { userId: 'player_q8344nt_mv41jjf2', username: 'PixelDino#7508', score: 1930, date: '10/11/2026' },
     { userId: 'chaXG9DhWdq14VitgxWmJn', username: 'chaXG9DhWdq14VitgxWmJn', score: 1850, date: '10/20/2026' },
     { userId: 'player_gay3blq_mv3yln9s', username: 'NeonDrake#6871', score: 1790, date: '10/11/2026' },
-    { userId: 'cLkoWQTKM1YVUoTfmCgNNj', username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 1725, date: '10/27/2026' },
+    { userId: 'player_sparkle_912', username: '閃耀星蛇#8201', score: 1725, date: '10/27/2026' },
     { userId: 'player_gcraktu_mul57wjt', username: '貪食蛇王者', score: 1680, date: '9/28/2026' },
     { userId: 'eZIm7pYOtAPVBLngvL1rlA', username: 'eZIm7pYOtAPVBLngvL1rlA', score: 1680, date: '10/20/2026' },
     { userId: 'cThOk2rgz4IFkekf-IKGOU', username: 'cThOk2rgz4IFkekf-IKGOU', score: 1335, date: '10/26/2026' },
@@ -328,7 +364,7 @@ export const SEED_LEADERBOARDS: Record<LeaderboardMode, SeedEntry[]> = {
     { userId: 'player_iga2vm6_muodaxzo', username: '布丁小蛇#1306', score: 1835, date: '10/5/2026' },
     { userId: 'dk_Hl2WM4fVZy3jN6UnPi-', username: 'dk_Hl2WM4fVZy3jN6UnPi-', score: 1730, date: '10/21/2026' },
     { userId: 'player_0sxj558_muqrxr6o', username: 'DDD', score: 1660, date: '10/2/2026' },
-    { userId: 'cLkoWQTKM1YVUoTfmCgNNj', username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 1250, date: '10/27/2026' },
+    { userId: 'player_aurora_451', username: '極光小龍#5512', score: 1250, date: '10/27/2026' },
     { userId: 'player_g8hkfa3_muv2mq3d', username: '琥珀怪獸#8738', score: 1130, date: '10/5/2026' },
     { userId: 'cThOk2rgz4IFkekf-IKGOU', username: 'cThOk2rgz4IFkekf-IKGOU', score: 1120, date: '10/26/2026' },
     { userId: 'cE6Gb44PJX6Vl5NrapfUrj', username: 'cE6Gb44PJX6Vl5NrapfUrj', score: 1120, date: '10/19/2026' },
@@ -355,7 +391,7 @@ export const SEED_LEADERBOARDS: Record<LeaderboardMode, SeedEntry[]> = {
     { userId: 'player_gcraktu_mul57wjt', username: '貪食蛇王者', score: 1295, date: '9/28/2026' },
     { userId: 'player_thrywz6_muo2cgof', username: '怪獸萌蛇王', score: 940, date: '9/30/2026' },
     { userId: 'player_g8hkfa3_muv2mq3d', username: '琥珀怪獸#8738', score: 935, date: '10/5/2026' },
-    { userId: 'cLkoWQTKM1YVUoTfmCgNNj', username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 745, date: '10/27/2026' },
+    { userId: 'player_chronos_319', username: '疾風飛龍#3391', score: 745, date: '10/27/2026' },
     { userId: 'cn83_9V8MlP8i59HWCEjvr', username: '怪獸萌蛇王', score: 570, date: '10/30/2026' },
     { userId: 'player_iga2vm6_muodaxzo', username: '布丁小蛇#1306', score: 510, date: '10/5/2026' },
     { userId: 'en807k5DI66ZWinyULLgJf', username: 'en807k5DI66ZWinyULLgJf', score: 440, date: '10/30/2026' },

@@ -61,7 +61,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     normalizeMode(initialMode || 'LEVELS')
   );
 
-  const playerFid = getOrCreatePlayerId();
+  const [playerFid, setPlayerFid] = useState<string>(() => getOrCreatePlayerId());
 
   // Firestore 即時排行榜狀態 (預設載入榮譽榜名單，杜絕只顯示自己一人的問題)
   const [entries, setEntries] = useState<FirestoreLeaderboardEntry[]>(() =>
@@ -77,9 +77,25 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
   const [showRulesGuide, setShowRulesGuide] = useState<boolean>(false);
   const [rulesCopied, setRulesCopied] = useState<boolean>(false);
 
-  // 每次打開排行榜時，預設顯示『闖關』模式
+  // 監聽 FID 派發更新 (如重設進度後即時切換新身分)
+  useEffect(() => {
+    const handleFidChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ fid: string }>).detail;
+      if (detail?.fid) {
+        setPlayerFid(detail.fid);
+        setEntries(getInitialLeaderboardEntries(activeMode));
+        setPlayerRank(null);
+        setPlayerCloudScore(null);
+      }
+    };
+    window.addEventListener('fid_updated', handleFidChange);
+    return () => window.removeEventListener('fid_updated', handleFidChange);
+  }, [activeMode]);
+
+  // 每次打開排行榜時，預設顯示『闖關』模式並同步最新真實 FID
   useEffect(() => {
     if (isOpen) {
+      setPlayerFid(getOrCreatePlayerId());
       const mode = initialMode ? normalizeMode(initialMode) : 'Missions';
       setActiveMode(mode);
       setEntries(getInitialLeaderboardEntries(mode));
@@ -750,7 +766,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                             {championBadgeLabel}
                           </span>
                         )}
-                        {entry.formattedDate && entry.formattedDate !== '雲端記錄' && (
+                        {entry.formattedDate && !entry.formattedDate.includes('雲端') && !entry.formattedDate.toLowerCase().includes('cloud') && (
                           <span className="text-slate-500 text-[10px]">{entry.formattedDate}</span>
                         )}
                       </div>

@@ -2026,14 +2026,18 @@ export default function App() {
     reviveSnake();
   }, [selectedMode, revivesUsed, profile.hearts, profile.coins, closeAllModals, handleOpenShop, reviveSnake]);
 
-  const handleResetData = useCallback(() => {
+  const handleResetData = useCallback(async () => {
     const userLang = profile.language || 'zh-HK';
     const oldFid = getOrCreatePlayerId();
 
-    // 1. 徹底銷毀舊 FID 並清除 Firestore 雲端排行榜中舊 FID 的各模式紀錄
-    deleteAllPlayerScoresFromLeaderboard(oldFid).catch((err) => {
+    // 1. 徹底銷毀舊 FID 並清除 Firestore 雲端排行榜中舊 FID 的各模式紀錄，並取得全新 FID
+    let newFid = '';
+    try {
+      const res = await deleteAllPlayerScoresFromLeaderboard(oldFid);
+      newFid = res.newFid;
+    } catch (err) {
       console.warn('重設本地遊戲進度時清除雲端紀錄警示:', err);
-    });
+    }
 
     // 2. 生成全新乾淨的 PlayerProfile，所有模式高分與場次徹底歸零
     const resetProfile = createDefaultPlayerProfile(userLang);
@@ -2085,12 +2089,12 @@ export default function App() {
 
     const successMsg =
       userLang === 'en'
-        ? '🔄 Local game progress reset to defaults!'
+        ? '🔄 Progress reset! Cloud rankings cleared & new FID assigned.'
         : userLang === 'ja'
-        ? '🔄 ローカル進行状況が初期状態にリセットされました！'
+        ? '🔄 初期化完了！クラウド記録を削除し新しいFIDを発行しました。'
         : userLang === 'zh-CN'
-        ? '🔄 本地游戏进度已成功重设！(已恢复初始状态)'
-        : '🔄 本機遊戲進度已成功重設！(已回復初始狀態)';
+        ? '🔄 已成功重设！云端排行榜排名已移除，已派发全新玩家 FID。'
+        : '🔄 已成功重設！雲端排行榜排名已移除，已派發全新玩家 FID。';
     showHeartNotice(successMsg);
   }, [profile.language, profile.hasCustomLanguage, profile.soundEnabled, profile.bgmEnabled, todayStr, showHeartNotice]);
 

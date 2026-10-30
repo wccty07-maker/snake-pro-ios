@@ -54,6 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [fid, setFid] = useState<string>(() => getSyncCachedFID());
   const [fidCopied, setFidCopied] = useState<boolean>(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
   const [resetSuccess, setResetSuccess] = useState<boolean>(false);
 
   // 當打開設定視窗獲取最新真實 FID
@@ -540,19 +541,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        onResetData();
-                        setIsConfirmingReset(false);
-                        setResetSuccess(true);
-                        setTimeout(() => {
-                          setResetSuccess(false);
-                        }, 4000);
+                      disabled={isResetting}
+                      onClick={async () => {
+                        setIsResetting(true);
+                        try {
+                          await onResetData();
+                          // 立即獲取最新派發的全新 FID
+                          const freshId = getSyncCachedFID();
+                          if (freshId && freshId !== 'fid_pending') {
+                            setFid(freshId);
+                          }
+                          setIsConfirmingReset(false);
+                          setResetSuccess(true);
+                          setTimeout(() => {
+                            setResetSuccess(false);
+                          }, 4500);
+                        } catch {
+                          setIsConfirmingReset(false);
+                        } finally {
+                          setIsResetting(false);
+                        }
                       }}
-                      className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-xs transition-all active:scale-95 cursor-pointer shadow-lg shadow-rose-900/40 border border-rose-400/50 flex items-center justify-center gap-1.5"
+                      className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-xs transition-all active:scale-95 cursor-pointer shadow-lg shadow-rose-900/40 border border-rose-400/50 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
                       <span>
-                        {currentLang === 'zh-CN' ? '确认重置' : currentLang === 'en' ? 'Confirm Reset' : currentLang === 'ja' ? '初期化を実行' : '確認重設'}
+                        {isResetting
+                          ? (currentLang === 'zh-CN' ? '重置中...' : currentLang === 'en' ? 'Resetting...' : currentLang === 'ja' ? 'リセット中...' : '重設中...')
+                          : (currentLang === 'zh-CN' ? '确认重置' : currentLang === 'en' ? 'Confirm Reset' : currentLang === 'ja' ? '初期化を実行' : '確認重設')}
                       </span>
                     </button>
                   </div>
@@ -565,12 +581,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span className="leading-snug text-center">
                     {currentLang === 'zh-CN'
-                      ? '已成功重设！本地游戏进度已恢复至初始状态。'
+                      ? '已成功重设！云端排名已清空，并已派发全新 FID。'
                       : currentLang === 'en'
-                      ? 'Reset complete! Local game data restored to defaults.'
+                      ? 'Reset complete! Cloud ranking cleared & fresh FID assigned.'
                       : currentLang === 'ja'
-                      ? '初期化完了！ゲームデータが初期状態に戻りました。'
-                      : '已成功重設！本機遊戲進度已回復至初始狀態。'}
+                      ? '初期化完了！クラウド順位をリセットし、新しいFIDを発行しました。'
+                      : '已成功重設！雲端排名已清空，並已派發全新 FID。'}
                   </span>
                 </div>
               )}

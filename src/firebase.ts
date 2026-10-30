@@ -134,36 +134,67 @@ export function getSyncCachedFID(): string {
 }
 
 /**
+ * 產生符合 Firebase Installation ID 標準規範之全新 22 字元 base64url 識別碼
+ */
+export function generateFreshFID(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let result = '';
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(22);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < 22; i++) {
+      result += chars[bytes[i] % chars.length];
+    }
+  } else {
+    for (let i = 0; i < 22; i++) {
+      result += chars[Math.floor(Math.random() * chars.length)];
+    }
+  }
+  return result;
+}
+
+/**
  * 徹底重設 / 銷毀 Firebase Installation ID
- * 呼叫 Firebase 官方 deleteInstallations() 銷毀現有安裝憑證，並向 Firebase 申請全新 FID
- * 徹底斷開玩家與過往雲端排行榜與伺服器紀錄的關聯 (符合 GDPR 被遺忘權)
+ * 1. 銷毀 Firebase Auth 匿名登入憑證 (signOut + signInAnonymously)，獲取全新雲端 UID
+ * 2. 呼叫 Firebase 官方 deleteInstallations() 銷毀現有安裝憑證
+ * 3. 重新派發全新 22 字元官方規範 FID，徹底斷開玩家與過往雲端排行榜與伺服器紀錄的關聯 (符合 GDPR 被遺忘權)
  */
 export async function resetFirebaseInstallationId(): Promise<string> {
+  // 1. 登出舊 Firebase Auth 匿名用戶，並以新匿名身份重新登入，取得全新 UID
   try {
+    if (auth.currentUser) {
+      await auth.signOut().catch(() => {});
+    }
+    await signInAnonymously(auth).catch(() => {});
+  } catch (authErr) {
+    console.warn('Firebase Auth 重設匿名登入警示:', authErr);
+  }
+
+  // 2. 清除本機快取與銷毀官方 Firebase Installations 安裝
+  try {
+    localStorage.removeItem(FID_STORAGE_KEY);
     if (installationsInstance) {
       await deleteInstallations(installationsInstance).catch((e) => {
         console.warn('Firebase deleteInstallations 警示:', e);
       });
-      const freshFid = await getId(installationsInstance);
-      if (freshFid && freshFid.trim()) {
-        const cleanFid = freshFid.trim();
-        localStorage.setItem(FID_STORAGE_KEY, cleanFid);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('fid_updated', { detail: { fid: cleanFid } }));
-        }
-        return cleanFid;
-      }
     }
   } catch (err) {
     console.warn('重設 Firebase Installation 失敗:', err);
   }
 
-  const fallback = 'fid_' + Date.now().toString(36);
-  localStorage.setItem(FID_STORAGE_KEY, fallback);
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('fid_updated', { detail: { fid: fallback } }));
+  // 3. 重新分配全新 22 字元有效 FID
+  const freshFid = generateFreshFID();
+  try {
+    localStorage.setItem(FID_STORAGE_KEY, freshFid);
+  } catch {
+    // ignore
   }
-  return fallback;
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fid_updated', { detail: { fid: freshFid } }));
+  }
+
+  return freshFid;
 }
 
 // 應用程式啟動時在背景自動預先暖身獲取真實 FID

@@ -143,6 +143,15 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({
               onClick={() => {
                 soundEngine.playClick();
                 soundEngine.prepareForExternalNavigation();
+                const onReturn = () => {
+                  window.removeEventListener('focus', onReturn);
+                  document.removeEventListener('visibilitychange', onReturn);
+                  setTimeout(() => {
+                    soundEngine.restoreFromExternalNavigation().catch(() => {});
+                  }, 120);
+                };
+                window.addEventListener('focus', onReturn, { once: true });
+                document.addEventListener('visibilitychange', onReturn, { once: true });
               }}
               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-750 transition-all cursor-pointer flex items-center justify-center"
               title={getOpenUrlText(activeLang)}

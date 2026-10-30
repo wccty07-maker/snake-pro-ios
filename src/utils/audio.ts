@@ -169,14 +169,17 @@ class SoundEngine {
         }
       }
       if (this.ctx && this.ctx.state === 'running') {
-        this.ctx.suspend().catch(() => {});
+        try {
+          this.ctx.suspend().catch(() => {});
+        } catch {
+          // ignore
+        }
       }
     } else {
-      // Returning to foreground / app resumed:
-      // If AudioContext was closed or interrupted by iOS while in browser, RECREATE IT IMMEDIATELY
-      if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
-        this.recreateContext();
-      }
+      // Returning to foreground / app resumed from browser or home:
+      // iOS WebKit CoreAudio sessions are often detached or muted when returning from Safari or external apps.
+      // Re-create the AudioContext cleanly to ensure a fresh, unblocked audio hardware pipeline.
+      this.recreateContext();
 
       if (this.bgmGainNode && this.ctx) {
         try {
@@ -187,11 +190,7 @@ class SoundEngine {
       }
 
       if (this.bgmEnabled) {
-        this.resumeAndRestoreAudio().then(() => {
-          if (!this.isHidden && this.bgmEnabled) {
-            this.startBgm();
-          }
-        }).catch(() => {});
+        this.resumeAndRestoreAudio().catch(() => {});
         this.startBgm();
       }
     }
@@ -428,16 +427,19 @@ class SoundEngine {
 
   public async restoreFromExternalNavigation(): Promise<boolean> {
     this.isHidden = false;
-    const res = await this.resumeAndRestoreAudio();
-    setTimeout(() => {
-      if (!this.ctx || this.ctx.state !== 'running') {
-        this.recreateContext();
-        if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || this.isBgmPlaying)) {
-          this.isBgmPlaying = false;
-          this.startBgm();
-        }
+    this.recreateContext();
+    if (this.bgmGainNode && this.ctx) {
+      try {
+        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+      } catch {
+        // ignore
       }
-    }, 250);
+    }
+    const res = await this.resumeAndRestoreAudio();
+    if (this.bgmEnabled) {
+      this.isBgmPlaying = false;
+      this.startBgm();
+    }
     return res;
   }
 
@@ -693,11 +695,8 @@ class SoundEngine {
 
       const state = audioCtx.state as string;
       if (state !== 'running') {
-        if (state === 'interrupted' || state === 'closed') {
-          this.recreateContext();
-        } else if (state === 'suspended') {
-          audioCtx.resume().catch(() => {});
-        }
+        // 音訊上下文未就緒時安靜等待，絕不可在此高頻 200ms 循環中反覆呼叫 resume()，
+        // 否則會堵塞 iOS WebKit 音訊指令佇列，導致回到桌面或關閉 App 時觸發緩衝區突發嗶聲。
         return;
       }
 
