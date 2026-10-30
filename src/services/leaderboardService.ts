@@ -289,72 +289,79 @@ export async function deleteAllPlayerScoresFromLeaderboard(
  * @param onError 發生錯誤時的回調函數
  * @returns 取消訂閱函數 (Unsubscribe)
  */
-export const SEED_LEADERBOARDS: Record<LeaderboardMode, { username: string; score: number }[]> = {
-  Missions: [
-    { username: 'chaXG9DhWdq14VitgxWmJn', score: 4350 },
-    { username: '顽皮灵蛇#1927', score: 4185 },
-    { username: 'eZIm7pYOtAPVBLngvL1rlA', score: 3250 },
-    { username: 'SugarSnake#9916', score: 2460 },
-    { username: '宇宙飛龍#7204', score: 1970 },
-    { username: '布丁小蛇#1306', score: 1835 },
-    { username: 'dk_Hl2WM4fVZy3jN6UnPi-', score: 1730 },
-    { username: 'DDD', score: 1660 },
-    { username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 1250 },
-    { username: '琥珀怪獸#8738', score: 1130 },
-    { username: 'cThOk2rgz4IFkekf-IKGOU', score: 1120 },
-    { username: 'cE6Gb44PJX6Vl5NrapfUrj', score: 1120 },
-    { username: 'MagicSerpent#560', score: 1070 },
-    { username: 'exZ96wXY7YIYmxraqUuvmj', score: 1010 },
-    { username: 'SwiftDino#8871', score: 1000 },
-    { username: 'dXu3FNAI_SLB90iPCkMPLy', score: 1000 },
-    { username: '32111', score: 990 },
-    { username: 'Monster', score: 980 },
-    { username: 'f83nNYmf5l35DeQ5K524aJ', score: 950 },
-    { username: '貪食蛇王者', score: 930 },
-  ],
+export interface SeedEntry {
+  userId: string;
+  username: string;
+  score: number;
+  date: string;
+}
+
+export const SEED_LEADERBOARDS: Record<LeaderboardMode, SeedEntry[]> = {
   Classic: [
-    { username: '顽皮灵蛇#1927', score: 3340 },
-    { username: '宇宙飛龍#7204', score: 2420 },
-    { username: 'PixelDino#7508', score: 1930 },
-    { username: 'SwiftDino#8871', score: 1000 },
-    { username: 'FrostyDino#2041', score: 420 },
-    { username: '布丁小蛇#1306', score: 260 },
-    { username: '123 abc', score: 170 },
-    { username: '怪獸萌蛇王', score: 150 },
-    { username: 'SugarSnake#9916', score: 140 },
-    { username: 'AmberDragon#302', score: 130 },
-    { username: 'RainbowCobra#77', score: 120 },
-    { username: 'NeonViper#401', score: 110 },
-    { username: 'SilverFang#88', score: 90 },
-    { username: 'LuckyPython#52', score: 80 },
-    { username: 'WindRider#619', score: 70 },
-    { username: 'GhostSnake#102', score: 60 },
-    { username: 'StarChaser#833', score: 50 },
-    { username: 'FlameStriker#4', score: 40 },
-    { username: 'ShadowSerpent', score: 30 },
-    { username: 'MiniWorm#11', score: 10 },
+    { userId: 'player_nqw5j3g_mv53tm99', username: '顽皮灵蛇#1927', score: 3340, date: '10/15/2026' },
+    { userId: 'dk_Hl2WM4fVZy3jN6UnPi-', username: 'dk_Hl2WM4fVZy3jN6UnPi-', score: 3220, date: '10/21/2026' },
+    { userId: 'player_vtnq2f2_muwk9oue', username: '宇宙飛龍#7204', score: 2420, date: '10/11/2026' },
+    { userId: 'dXu3FNAI_SLB90iPCkMPLy', username: 'dXu3FNAI_SLB90iPCkMPLy', score: 2200, date: '10/19/2026' },
+    { userId: 'player_q8344nt_mv41jjf2', username: 'PixelDino#7508', score: 1930, date: '10/11/2026' },
+    { userId: 'chaXG9DhWdq14VitgxWmJn', username: 'chaXG9DhWdq14VitgxWmJn', score: 1850, date: '10/20/2026' },
+    { userId: 'player_gay3blq_mv3yln9s', username: 'NeonDrake#6871', score: 1790, date: '10/11/2026' },
+    { userId: 'cLkoWQTKM1YVUoTfmCgNNj', username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 1725, date: '10/27/2026' },
+    { userId: 'player_gcraktu_mul57wjt', username: '貪食蛇王者', score: 1680, date: '9/28/2026' },
+    { userId: 'eZIm7pYOtAPVBLngvL1rlA', username: 'eZIm7pYOtAPVBLngvL1rlA', score: 1680, date: '10/20/2026' },
+    { userId: 'cThOk2rgz4IFkekf-IKGOU', username: 'cThOk2rgz4IFkekf-IKGOU', score: 1335, date: '10/26/2026' },
+    { userId: 'cE6Gb44PJX6Vl5NrapfUrj', username: 'cE6Gb44PJX6Vl5NrapfUrj', score: 1175, date: '10/19/2026' },
+    { userId: 'player_qe5e3e4_mv3x2uaz', username: 'SwiftDino#8871', score: 1000, date: '10/11/2026' },
+    { userId: 'exZ96wXY7YIYmxraqUuvmj', username: 'exZ96wXY7YIYmxraqUuvmj', score: 1000, date: '10/19/2026' },
+    { userId: 'player_367aemm_muqsgz0k', username: 'Monster', score: 830, date: '10/2/2026' },
+    { userId: 'cn83_9V8MlP8i59HWCEjvr', username: '怪獸萌蛇王', score: 720, date: '10/30/2026' },
+    { userId: 'player_vcrof4j_mv3xzt6g', username: 'FrostyDino#2041', score: 420, date: '10/11/2026' },
+    { userId: 'player_a3j55m1_muv8hk0e', username: 'MagicSerpent#560', score: 355, date: '10/6/2026' },
+    { userId: 'player_iga2vm6_muodaxzo', username: '布丁小蛇#1306', score: 260, date: '10/5/2026' },
+    { userId: 'en807k5DI66ZWinyULLgJf', username: 'en807k5DI66ZWinyULLgJf', score: 220, date: '10/30/2026' },
+  ],
+  Missions: [
+    { userId: 'chaXG9DhWdq14VitgxWmJn', username: 'chaXG9DhWdq14VitgxWmJn', score: 4350, date: '10/20/2026' },
+    { userId: 'player_nqw5j3g_mv53tm99', username: '顽皮灵蛇#1927', score: 4185, date: '10/15/2026' },
+    { userId: 'eZIm7pYOtAPVBLngvL1rlA', username: 'eZIm7pYOtAPVBLngvL1rlA', score: 3250, date: '10/20/2026' },
+    { userId: 'player_gkb8bv6_mv3zdjlv', username: 'SugarSnake#9916', score: 2460, date: '10/11/2026' },
+    { userId: 'player_vtnq2f2_muwk9oue', username: '宇宙飛龍#7204', score: 1970, date: '10/11/2026' },
+    { userId: 'player_iga2vm6_muodaxzo', username: '布丁小蛇#1306', score: 1835, date: '10/5/2026' },
+    { userId: 'dk_Hl2WM4fVZy3jN6UnPi-', username: 'dk_Hl2WM4fVZy3jN6UnPi-', score: 1730, date: '10/21/2026' },
+    { userId: 'player_0sxj558_muqrxr6o', username: 'DDD', score: 1660, date: '10/2/2026' },
+    { userId: 'cLkoWQTKM1YVUoTfmCgNNj', username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 1250, date: '10/27/2026' },
+    { userId: 'player_g8hkfa3_muv2mq3d', username: '琥珀怪獸#8738', score: 1130, date: '10/5/2026' },
+    { userId: 'cThOk2rgz4IFkekf-IKGOU', username: 'cThOk2rgz4IFkekf-IKGOU', score: 1120, date: '10/26/2026' },
+    { userId: 'cE6Gb44PJX6Vl5NrapfUrj', username: 'cE6Gb44PJX6Vl5NrapfUrj', score: 1120, date: '10/19/2026' },
+    { userId: 'player_a3j55m1_muv8hk0e', username: 'MagicSerpent#560', score: 1070, date: '10/6/2026' },
+    { userId: 'exZ96wXY7YIYmxraqUuvmj', username: 'exZ96wXY7YIYmxraqUuvmj', score: 1010, date: '10/19/2026' },
+    { userId: 'player_qe5e3e4_mv3x2uaz', username: 'SwiftDino#8871', score: 1000, date: '10/11/2026' },
+    { userId: 'dXu3FNAI_SLB90iPCkMPLy', username: 'dXu3FNAI_SLB90iPCkMPLy', score: 1000, date: '10/19/2026' },
+    { userId: 'player_w3g73ji_mutu0sdh', username: '32111', score: 990, date: '10/4/2026' },
+    { userId: 'player_367aemm_muqsgz0k', username: 'Monster', score: 980, date: '10/2/2026' },
+    { userId: 'f83nNYmf5l35DeQ5K524aJ', username: 'f83nNYmf5l35DeQ5K524aJ', score: 950, date: '10/19/2026' },
+    { userId: 'player_gcraktu_mul57wjt', username: '貪食蛇王者', score: 930, date: '9/29/2026' },
   ],
   Time: [
-    { username: '顽皮灵蛇#1927', score: 2550 },
-    { username: '宇宙飛龍#7204', score: 2100 },
-    { username: '123 abc', score: 1790 },
-    { username: '怪獸萌蛇王', score: 940 },
-    { username: '布丁小蛇#1306', score: 510 },
-    { username: 'PixelDino#7508', score: 140 },
-    { username: 'SugarSnake#9916', score: 130 },
-    { username: 'TurboSpeed#99', score: 120 },
-    { username: 'SwiftDino#8871', score: 110 },
-    { username: 'FlashSnake#777', score: 100 },
-    { username: 'QuickBite#450', score: 90 },
-    { username: 'TimerKing#12', score: 80 },
-    { username: 'SonicTail#88', score: 70 },
-    { username: 'RapidFang#33', score: 60 },
-    { username: 'SpeedyViper#9', score: 50 },
-    { username: 'LightningCobra', score: 40 },
-    { username: 'DashMaster#6', score: 30 },
-    { username: 'RushSerpent#2', score: 20 },
-    { username: 'ChronoSnake#8', score: 15 },
-    { username: 'MinuteHunter#1', score: 10 },
+    { userId: 'dk_Hl2WM4fVZy3jN6UnPi-', username: 'dk_Hl2WM4fVZy3jN6UnPi-', score: 4440, date: '10/21/2026' },
+    { userId: 'player_nqw5j3g_mv53tm99', username: '顽皮灵蛇#1927', score: 2550, date: '10/15/2026' },
+    { userId: 'exZ96wXY7YIYmxraqUuvmj', username: 'exZ96wXY7YIYmxraqUuvmj', score: 2225, date: '10/19/2026' },
+    { userId: 'player_vtnq2f2_muwk9oue', username: '宇宙飛龍#7204', score: 2100, date: '10/11/2026' },
+    { userId: 'player_vak869r_mumuhp0d', username: '123 abc', score: 1790, date: '9/30/2026' },
+    { userId: 'player_gay3blq_mv3yln9s', username: 'NeonDrake#6871', score: 1790, date: '10/11/2026' },
+    { userId: 'cE6Gb44PJX6Vl5NrapfUrj', username: 'cE6Gb44PJX6Vl5NrapfUrj', score: 1660, date: '10/19/2026' },
+    { userId: 'dXu3FNAI_SLB90iPCkMPLy', username: 'dXu3FNAI_SLB90iPCkMPLy', score: 1505, date: '10/19/2026' },
+    { userId: 'player_5dyqhhx_mv40u8xm', username: 'SwiftDrake#6216', score: 1465, date: '10/11/2026' },
+    { userId: 'player_a3j55m1_muv8hk0e', username: 'MagicSerpent#560', score: 1300, date: '10/6/2026' },
+    { userId: 'player_gcraktu_mul57wjt', username: '貪食蛇王者', score: 1295, date: '9/28/2026' },
+    { userId: 'player_thrywz6_muo2cgof', username: '怪獸萌蛇王', score: 940, date: '9/30/2026' },
+    { userId: 'player_g8hkfa3_muv2mq3d', username: '琥珀怪獸#8738', score: 935, date: '10/5/2026' },
+    { userId: 'cLkoWQTKM1YVUoTfmCgNNj', username: 'cLkoWQTKM1YVUoTfmCgNNj', score: 745, date: '10/27/2026' },
+    { userId: 'cn83_9V8MlP8i59HWCEjvr', username: '怪獸萌蛇王', score: 570, date: '10/30/2026' },
+    { userId: 'player_iga2vm6_muodaxzo', username: '布丁小蛇#1306', score: 510, date: '10/5/2026' },
+    { userId: 'en807k5DI66ZWinyULLgJf', username: 'en807k5DI66ZWinyULLgJf', score: 440, date: '10/30/2026' },
+    { userId: 'cThOk2rgz4IFkekf-IKGOU', username: 'cThOk2rgz4IFkekf-IKGOU', score: 300, date: '10/26/2026' },
+    { userId: 'player_367aemm_muqsgz0k', username: 'Monster', score: 195, date: '10/2/2026' },
+    { userId: 'f83nNYmf5l35DeQ5K524aJ', username: 'f83nNYmf5l35DeQ5K524aJ', score: 170, date: '10/19/2026' },
   ],
 };
 
@@ -369,7 +376,10 @@ export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): Fi
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length >= 20) {
-          return parsed;
+          return parsed.map((p: any) => ({
+            ...p,
+            formattedDate: p.formattedDate === '雲端記錄' ? '' : (p.formattedDate || ''),
+          }));
         }
       }
     } catch {
@@ -380,12 +390,12 @@ export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): Fi
   const seeds = SEED_LEADERBOARDS[targetMode] || SEED_LEADERBOARDS.Missions;
   return seeds.map((s, idx) => ({
     id: `seed_${targetMode}_${idx}`,
-    userId: s.username,
+    userId: s.userId || s.username,
     username: s.username,
     score: s.score,
     mode: targetMode,
     rank: idx + 1,
-    formattedDate: '雲端記錄',
+    formattedDate: s.date || '',
     isCurrentPlayer: false,
   }));
 }
@@ -458,11 +468,11 @@ export function subscribeToTop20Leaderboard(
         if (!existingUsernames.has(seed.username.toLowerCase())) {
           entries.push({
             id: `seed_${targetMode}_${i}`,
-            userId: seed.username,
+            userId: seed.userId || seed.username,
             username: seed.username,
             score: seed.score,
             mode: targetMode,
-            formattedDate: '雲端記錄',
+            formattedDate: seed.date || '',
             isCurrentPlayer: false,
           });
           existingUsernames.add(seed.username.toLowerCase());

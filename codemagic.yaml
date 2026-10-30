@@ -18,7 +18,7 @@ workflows:
           npm uninstall @capacitor/app --no-save || true
           rm -rf node_modules/@capacitor/app || true
 
-          # 安裝 macOS arm64 原生編譯依賴
+          # Install macOS arm64 native binaries
           OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
           LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
           ROLLDOWN_VER=$(node -p "require('./node_modules/rolldown/package.json').version" 2>/dev/null || echo "1.2.9")
@@ -32,8 +32,10 @@ workflows:
 
       - name: Prepare & Sync iOS Native Project
         script: |
+          # Clean old SPM plugins from previous runs
           rm -rf ios/App/CapApp-SPM/.build || true
           npx cap sync ios
+          # Ensure CapApp-SPM Package.swift does not reference CapacitorApp
           if [ -f ios/App/CapApp-SPM/Package.swift ]; then
             sed -i '' '/CapacitorApp/d' ios/App/CapApp-SPM/Package.swift 2>/dev/null || true
             sed -i '' '/capacitor-plugins/d' ios/App/CapApp-SPM/Package.swift 2>/dev/null || true
@@ -64,6 +66,8 @@ workflows:
           echo "APP_STORE_ISSUER_ID: ${APP_STORE_ISSUER_ID:-[EMPTY]}"
           if [ -n "$APP_STORE_PRIVATE_KEY" ]; then
             echo "APP_STORE_PRIVATE_KEY length: ${#APP_STORE_PRIVATE_KEY} chars"
+          else
+            echo "APP_STORE_PRIVATE_KEY: [EMPTY]"
           fi
           cd ios/App
           fastlane build_signed_ipa
@@ -71,9 +75,12 @@ workflows:
       - name: Patch IPA (iOS 26 SDK, Xcode 26 & Clean App Icons)
         script: |
           RUN_NUM="${BUILD_NUMBER:-1}"
-          CALCULATED_BUILD=$(( RUN_NUM + 60 ))
-          export BUILD_NUMBER=$CALCULATED_BUILD
-          echo "Setting CFBundleVersion to: $CALCULATED_BUILD (Must be > 55)"
+          if [ "$RUN_NUM" -le 55 ] 2>/dev/null; then
+            CALCULATED_BUILD=$(( RUN_NUM + 60 ))
+          else
+            CALCULATED_BUILD=$RUN_NUM
+          fi
+          echo "Setting CFBundleVersion to: $CALCULATED_BUILD"
           KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain-db"
           if [ ! -f "$KEYCHAIN_PATH" ]; then
             KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain"

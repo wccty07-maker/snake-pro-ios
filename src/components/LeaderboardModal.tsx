@@ -317,11 +317,11 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
         if (!existingUsernames.has(seed.username.toLowerCase())) {
           list.push({
             id: `seed_${activeMode}_${i}`,
-            userId: seed.username,
+            userId: seed.userId || seed.username,
             username: seed.username,
             score: seed.score,
             mode: activeMode,
-            formattedDate: '雲端記錄',
+            formattedDate: seed.date || '',
             isCurrentPlayer: false,
           });
           existingUsernames.add(seed.username.toLowerCase());
@@ -750,7 +750,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                             {championBadgeLabel}
                           </span>
                         )}
-                        <span className="text-slate-500 text-[10px]">{entry.formattedDate}</span>
+                        {entry.formattedDate && entry.formattedDate !== '雲端記錄' && (
+                          <span className="text-slate-500 text-[10px]">{entry.formattedDate}</span>
+                        )}
                       </div>
                     </div>
                   </div>
