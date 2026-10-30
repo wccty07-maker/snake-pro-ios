@@ -52,7 +52,7 @@ workflows:
       - name: Patch Xcode Project Signing
         script: |
           RUN_NUM="${BUILD_NUMBER:-1}"
-          OFFSET=60
+          OFFSET=130
           CALCULATED_BUILD=$(( RUN_NUM + OFFSET ))
           export BUILD_NUMBER=$CALCULATED_BUILD
           echo "BUILD_NUMBER=$CALCULATED_BUILD" >> $CM_ENV
@@ -75,8 +75,8 @@ workflows:
       - name: Patch IPA (iOS 26 SDK, Xcode 26 & Clean App Icons)
         script: |
           RUN_NUM="${BUILD_NUMBER:-1}"
-          if [ "$RUN_NUM" -le 55 ] 2>/dev/null; then
-            CALCULATED_BUILD=$(( RUN_NUM + 60 ))
+          if [ "$RUN_NUM" -le 126 ] 2>/dev/null; then
+            CALCULATED_BUILD=$(( RUN_NUM + 130 ))
           else
             CALCULATED_BUILD=$RUN_NUM
           fi
