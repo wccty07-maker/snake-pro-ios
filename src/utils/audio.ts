@@ -133,7 +133,16 @@ class SoundEngine {
             // ignore
           }
         });
-      } else if (state === 'interrupted' || state === 'suspended') {
+      } else if (state === 'interrupted') {
+        // iOS WebKit marks context interrupted when switching to Safari or external browser.
+        // It cannot be resumed via .resume(); it must be recreated upon return.
+        if (!this.isHidden) {
+          this.recreateContext();
+          if (this.bgmEnabled) {
+            this.startBgm();
+          }
+        }
+      } else if (state === 'suspended') {
         if (!this.isHidden) {
           ctx.resume().catch(() => {});
         }
@@ -163,7 +172,12 @@ class SoundEngine {
         this.ctx.suspend().catch(() => {});
       }
     } else {
-      // Returning to foreground: if BGM is enabled, restore audio and start BGM immediately!
+      // Returning to foreground / app resumed:
+      // If AudioContext was closed or interrupted by iOS while in browser, RECREATE IT IMMEDIATELY
+      if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
+        this.recreateContext();
+      }
+
       if (this.bgmGainNode && this.ctx) {
         try {
           this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
@@ -171,6 +185,7 @@ class SoundEngine {
           // ignore
         }
       }
+
       if (this.bgmEnabled) {
         this.resumeAndRestoreAudio().then(() => {
           if (!this.isHidden && this.bgmEnabled) {
@@ -192,6 +207,11 @@ class SoundEngine {
     const handleGesture = () => {
       // If returning to the app and BGM was supposed to be playing or enabled, resume it!
       if (this.bgmEnabled && !this.isHidden) {
+        // If context was interrupted or dead, recreate it now that we have user interaction
+        if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
+          this.recreateContext();
+        }
+
         if (this.bgmGainNode && this.ctx) {
           try {
             this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
@@ -199,14 +219,15 @@ class SoundEngine {
             // ignore
           }
         }
-        if (!this.isBgmPlaying || !this.ctx || this.ctx.state !== 'running') {
+
+        if (!this.isBgmPlaying || !this.bgmIntervalId || !this.ctx || this.ctx.state !== 'running') {
           this.resumeAndRestoreAudio().catch(() => {});
           this.startBgm();
         }
       }
 
       // Fast path: if already active and running, zero work on gameplay touch events
-      if (this.ctx && this.ctx.state === 'running') {
+      if (this.ctx && this.ctx.state === 'running' && this.isBgmPlaying && this.bgmIntervalId !== null) {
         return;
       }
 
@@ -537,13 +558,17 @@ class SoundEngine {
       }
     }
 
-    // If interval is active and playing, just resume ctx
+    // If interval is active and playing, verify context health
     if (this.isBgmPlaying && this.bgmIntervalId !== null) {
       const state = ctx.state as string;
-      if (state === 'suspended' || state === 'interrupted') {
+      if (state === 'interrupted' || state === 'closed') {
+        this.recreateContext();
+      } else if (state === 'suspended') {
         ctx.resume().catch(() => {});
+        return;
+      } else if (state === 'running') {
+        return;
       }
-      return;
     }
 
     // Clear any stale interval
@@ -668,10 +693,10 @@ class SoundEngine {
 
       const state = audioCtx.state as string;
       if (state !== 'running') {
-        if (state === 'suspended' || state === 'interrupted') {
-          audioCtx.resume().catch(() => {});
-        } else if (state === 'closed') {
+        if (state === 'interrupted' || state === 'closed') {
           this.recreateContext();
+        } else if (state === 'suspended') {
+          audioCtx.resume().catch(() => {});
         }
         return;
       }
@@ -957,7 +982,7 @@ class SoundEngine {
    * Pause sound (playful cute spring/drop)
    */
   public playPause() {
-    if (!this.soundEnabled) return;
+    if (!this.soundEnabled || this.isHidden || (typeof document !== 'undefined' && document.hidden)) return;
     const ctx = this.initContext();
     if (!ctx) return;
 
@@ -1671,7 +1696,7 @@ class SoundEngine {
    * Button click / tap
    */
   public playClick() {
-    if (!this.soundEnabled) return;
+    if (!this.soundEnabled || this.isHidden || (typeof document !== 'undefined' && document.hidden)) return;
     const ctx = this.initContext();
     if (!ctx) return;
 

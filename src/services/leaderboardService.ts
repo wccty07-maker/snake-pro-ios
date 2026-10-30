@@ -320,7 +320,19 @@ export const SEED_LEADERBOARDS: Record<LeaderboardMode, { username: string; scor
     { username: 'FrostyDino#2041', score: 420 },
     { username: '布丁小蛇#1306', score: 260 },
     { username: '123 abc', score: 170 },
-    { username: '怪獸萌蛇王', score: 10 },
+    { username: '怪獸萌蛇王', score: 150 },
+    { username: 'SugarSnake#9916', score: 140 },
+    { username: 'AmberDragon#302', score: 130 },
+    { username: 'RainbowCobra#77', score: 120 },
+    { username: 'NeonViper#401', score: 110 },
+    { username: 'SilverFang#88', score: 90 },
+    { username: 'LuckyPython#52', score: 80 },
+    { username: 'WindRider#619', score: 70 },
+    { username: 'GhostSnake#102', score: 60 },
+    { username: 'StarChaser#833', score: 50 },
+    { username: 'FlameStriker#4', score: 40 },
+    { username: 'ShadowSerpent', score: 30 },
+    { username: 'MiniWorm#11', score: 10 },
   ],
   Time: [
     { username: '顽皮灵蛇#1927', score: 2550 },
@@ -329,6 +341,20 @@ export const SEED_LEADERBOARDS: Record<LeaderboardMode, { username: string; scor
     { username: '怪獸萌蛇王', score: 940 },
     { username: '布丁小蛇#1306', score: 510 },
     { username: 'PixelDino#7508', score: 140 },
+    { username: 'SugarSnake#9916', score: 130 },
+    { username: 'TurboSpeed#99', score: 120 },
+    { username: 'SwiftDino#8871', score: 110 },
+    { username: 'FlashSnake#777', score: 100 },
+    { username: 'QuickBite#450', score: 90 },
+    { username: 'TimerKing#12', score: 80 },
+    { username: 'SonicTail#88', score: 70 },
+    { username: 'RapidFang#33', score: 60 },
+    { username: 'SpeedyViper#9', score: 50 },
+    { username: 'LightningCobra', score: 40 },
+    { username: 'DashMaster#6', score: 30 },
+    { username: 'RushSerpent#2', score: 20 },
+    { username: 'ChronoSnake#8', score: 15 },
+    { username: 'MinuteHunter#1', score: 10 },
   ],
 };
 
@@ -342,7 +368,7 @@ export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): Fi
       const cached = localStorage.getItem(`snake_pro_top20_cache_${targetMode}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && parsed.length >= 20) {
           return parsed;
         }
       }
@@ -422,6 +448,35 @@ export function subscribeToTop20Leaderboard(
         isCurrentPlayer: isCurrent,
       });
     });
+
+    // 若雲端有效玩家紀錄少於 20 人，自動以榮譽榜名單補足至完整前 20 名 (TOP 20)
+    if (entries.length < 20) {
+      const seedList = SEED_LEADERBOARDS[targetMode] || SEED_LEADERBOARDS.Missions;
+      const existingUsernames = new Set(entries.map((e) => (e.username || '').toLowerCase()));
+      for (let i = 0; i < seedList.length && entries.length < 20; i++) {
+        const seed = seedList[i];
+        if (!existingUsernames.has(seed.username.toLowerCase())) {
+          entries.push({
+            id: `seed_${targetMode}_${i}`,
+            userId: seed.username,
+            username: seed.username,
+            score: seed.score,
+            mode: targetMode,
+            formattedDate: '雲端記錄',
+            isCurrentPlayer: false,
+          });
+          existingUsernames.add(seed.username.toLowerCase());
+        }
+      }
+      // 重新依分數由高至低排列並校正 rank 1..20
+      entries.sort((a, b) => (b.score || 0) - (a.score || 0));
+      entries.forEach((e, idx) => {
+        e.rank = idx + 1;
+        if (e.isCurrentPlayer) {
+          playerRank = e.rank;
+        }
+      });
+    }
 
     if (entries.length > 0) {
       try {

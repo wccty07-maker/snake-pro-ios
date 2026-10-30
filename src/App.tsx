@@ -14,7 +14,6 @@ import {
 } from './utils/gameData';
 import { LEVEL_MISSIONS, getLocalizedLevel } from './utils/levelsData';
 import { soundEngine } from './utils/audio';
-import { App as CapApp } from '@capacitor/app';
 import { detectSystemLanguage } from './utils/i18n';
 import { calculateHearts } from './utils/hearts';
 import { useSnakeEngine } from './hooks/useSnakeEngine';
@@ -599,23 +598,16 @@ export default function App() {
     soundEngine.setBgmEnabled(profile.bgmEnabled ?? true);
   }, [profile.soundEnabled, profile.bgmEnabled]);
 
-  // Native iOS Capacitor background / foreground bridge
+  // Background / foreground audio lifecycle listener
   useEffect(() => {
-    let handle: any = null;
-    try {
-      CapApp.addListener('appStateChange', (state) => {
-        soundEngine.handleVisibilityOrFocusChange(state.isActive);
-      }).then((res) => {
-        handle = res;
-      }).catch(() => {});
-    } catch {
-      // Running in standard web browser
-    }
-
+    const handleVisibility = () => {
+      soundEngine.handleVisibilityOrFocusChange(!document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
     return () => {
-      if (handle && typeof handle.remove === 'function') {
-        handle.remove();
-      }
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, []);
 
@@ -1327,7 +1319,7 @@ export default function App() {
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
         if (appView === 'PLAYING' && isPlaying && !isPaused) {
-          pauseGame(true);
+          pauseGame(true, true);
         }
         soundEngine.handleVisibilityOrFocusChange(false);
       } else if (document.visibilityState === 'visible') {
@@ -1337,7 +1329,7 @@ export default function App() {
 
     const handlePageHide = () => {
       if (appView === 'PLAYING' && isPlaying && !isPaused) {
-        pauseGame(true);
+        pauseGame(true, true);
       }
       soundEngine.handleVisibilityOrFocusChange(false);
     };

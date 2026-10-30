@@ -1,16 +1,52 @@
 default_platform(:ios)
 
+def get_sanitized_api_key
+  raw_key = ENV["APP_STORE_PRIVATE_KEY"].to_s.strip
+  key_id = ENV["APP_STORE_KEY_ID"].to_s.strip
+  issuer_id = ENV["APP_STORE_ISSUER_ID"].to_s.strip
+
+  UI.message("--- Validating App Store Connect API Credentials ---")
+  UI.message("  APP_STORE_KEY_ID: #{key_id.empty? ? 'MISSING ❌' : "[Present: #{key_id}] ✅"}")
+  UI.message("  APP_STORE_ISSUER_ID: #{issuer_id.empty? ? 'MISSING ❌' : "[Present: #{issuer_id}] ✅"}")
+  UI.message("  APP_STORE_PRIVATE_KEY: #{raw_key.empty? ? 'MISSING ❌' : "[Present, length=#{raw_key.length} chars] ✅"}")
+
+  if key_id.empty? || issuer_id.empty? || raw_key.empty?
+    UI.user_error!("Missing App Store Connect credentials in Environment Variables! Please make sure APP_STORE_KEY_ID, APP_STORE_ISSUER_ID, and APP_STORE_PRIVATE_KEY are set in Codemagic.")
+  end
+
+  # Auto-fix literal \n backslash escapes and carriage returns
+  raw_key = raw_key.gsub('\n', "\n").gsub('\r', "").strip
+
+  # Auto-detect base64 encoded private key
+  if !raw_key.include?("BEGIN PRIVATE KEY")
+    begin
+      require "base64"
+      decoded = Base64.decode64(raw_key)
+      raw_key = decoded.strip if decoded.include?("BEGIN PRIVATE KEY")
+    rescue => e
+      UI.message("Base64 decode note: #{e.message}")
+    end
+  end
+
+  # Ensure PEM header / footer exists
+  if !raw_key.include?("BEGIN PRIVATE KEY")
+    raw_key = "-----BEGIN PRIVATE KEY-----\n#{raw_key}\n-----END PRIVATE KEY-----"
+  end
+
+  app_store_connect_api_key(
+    key_id: key_id,
+    issuer_id: issuer_id,
+    key_content: raw_key,
+    is_key_content_base64: false,
+    in_house: false
+  )
+end
+
 platform :ios do
   desc "Build Signed IPA"
   lane :build_signed_ipa do
     # 1. Configure App Store Connect API Key
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_KEY_ID"],
-      issuer_id: ENV["APP_STORE_ISSUER_ID"],
-      key_content: ENV["APP_STORE_PRIVATE_KEY"],
-      is_key_content_base64: false,
-      in_house: false
-    )
+    api_key = get_sanitized_api_key
 
     # 2. Create isolated temporary keychain on CI runner
     keychain_name = "ci_fastlane_keychain"
@@ -153,7 +189,7 @@ platform :ios do
         }
       },
       xcargs: "DEVELOPMENT_TEAM=#{team_id} CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=\"Apple Distribution\" PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\" OTHER_CODE_SIGN_FLAGS=\"--keychain #{keychain_path}\"",
-      output_directory: "../../build",
+      output_directory: File.expand_path("../../../build", __dir__),
       output_name: "SnakePro.ipa"
     }
 
@@ -170,17 +206,25 @@ platform :ios do
 
   desc "Upload Patched IPA directly to TestFlight"
   lane :upload_ipa do
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_KEY_ID"],
-      issuer_id: ENV["APP_STORE_ISSUER_ID"],
-      key_content: ENV["APP_STORE_PRIVATE_KEY"],
-      is_key_content_base64: false,
-      in_house: false
-    )
+    api_key = get_sanitized_api_key
+
+    ipa_path = File.expand_path("../../../build/SnakePro.ipa", __dir__)
+    unless File.exist?(ipa_path)
+      # Fallback checks in case of relative path differences
+      alt_paths = [
+        File.expand_path("../../build/SnakePro.ipa", __dir__),
+        File.expand_path("../build/SnakePro.ipa", __dir__),
+        "build/SnakePro.ipa"
+      ]
+      found = alt_paths.find { |p| File.exist?(p) }
+      ipa_path = found if found
+    end
+
+    UI.message("Uploading IPA from path: #{ipa_path}")
 
     upload_to_testflight(
       api_key: api_key,
-      ipa: "../../build/SnakePro.ipa",
+      ipa: ipa_path,
       skip_waiting_for_build_processing: true
     )
   end

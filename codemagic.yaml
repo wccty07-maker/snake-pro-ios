@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       node: 22
-      xcode: 16.0
+      xcode: latest
       groups:
         - app_store_credentials
       vars:
@@ -13,7 +13,11 @@ workflows:
     scripts:
       - name: Install Node Dependencies
         script: |
+          npm uninstall @capacitor/app --no-save || true
           npm install --legacy-peer-deps
+          npm uninstall @capacitor/app --no-save || true
+          rm -rf node_modules/@capacitor/app || true
+
           # Install macOS arm64 native binaries
           OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version" 2>/dev/null || echo "4.3.3")
           LIGHTNING_VER=$(node -p "require('./node_modules/lightningcss/package.json').version" 2>/dev/null || node -p "require('@tailwindcss/node/node_modules/lightningcss/package.json').version" 2>/dev/null || echo "1.33.0")
@@ -28,7 +32,14 @@ workflows:
 
       - name: Prepare & Sync iOS Native Project
         script: |
+          # Clean old SPM plugins from previous runs
+          rm -rf ios/App/CapApp-SPM/.build || true
           npx cap sync ios
+          # Ensure CapApp-SPM Package.swift does not reference CapacitorApp
+          if [ -f ios/App/CapApp-SPM/Package.swift ]; then
+            sed -i '' '/CapacitorApp/d' ios/App/CapApp-SPM/Package.swift 2>/dev/null || true
+            sed -i '' '/capacitor-plugins/d' ios/App/CapApp-SPM/Package.swift 2>/dev/null || true
+          fi
           mkdir -p ios/App/App/public
           rm -rf ios/App/App/public/*
           cp -r dist/* ios/App/App/public/
@@ -40,25 +51,41 @@ workflows:
 
       - name: Patch Xcode Project Signing
         script: |
-          RUN_NUM="${BUILD_NUMBER:-10}"
-          OFFSET=10
+          RUN_NUM="${BUILD_NUMBER:-1}"
+          OFFSET=60
           CALCULATED_BUILD=$(( RUN_NUM + OFFSET ))
           export BUILD_NUMBER=$CALCULATED_BUILD
+          echo "BUILD_NUMBER=$CALCULATED_BUILD" >> $CM_ENV
           echo "Calculated Build Number: $CALCULATED_BUILD"
-          python3 scripts/patch-xcode-signing.py ios/App/App.xcodeproj/project.pbxproj "${APPLE_TEAM_ID:-N2S5289QDM}" "elemall.snakegame.1 AppStore 1793016646" "$CALCULATED_BUILD"
+          python3 scripts/patch-xcode-signing.py ios/App/App.xcodeproj/project.pbxproj "${APPLE_TEAM_ID:-N2S5289QDM}" "" "$CALCULATED_BUILD"
 
       - name: Build Signed IPA with Fastlane
         script: |
+          echo "=== Verifying Credentials in Environment ==="
+          echo "APP_STORE_KEY_ID: ${APP_STORE_KEY_ID:-[EMPTY]}"
+          echo "APP_STORE_ISSUER_ID: ${APP_STORE_ISSUER_ID:-[EMPTY]}"
+          if [ -n "$APP_STORE_PRIVATE_KEY" ]; then
+            echo "APP_STORE_PRIVATE_KEY length: ${#APP_STORE_PRIVATE_KEY} chars"
+          else
+            echo "APP_STORE_PRIVATE_KEY: [EMPTY]"
+          fi
           cd ios/App
           fastlane build_signed_ipa
 
       - name: Patch IPA (iOS 26 SDK, Xcode 26 & Clean App Icons)
         script: |
+          RUN_NUM="${BUILD_NUMBER:-1}"
+          if [ "$RUN_NUM" -le 55 ] 2>/dev/null; then
+            CALCULATED_BUILD=$(( RUN_NUM + 60 ))
+          else
+            CALCULATED_BUILD=$RUN_NUM
+          fi
+          echo "Setting CFBundleVersion to: $CALCULATED_BUILD"
           KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain-db"
           if [ ! -f "$KEYCHAIN_PATH" ]; then
             KEYCHAIN_PATH="$HOME/Library/Keychains/ci_fastlane_keychain"
           fi
-          python3 scripts/patch-ipa.py build/SnakePro.ipa "$KEYCHAIN_PATH"
+          python3 scripts/patch-ipa.py build/SnakePro.ipa "$KEYCHAIN_PATH" "$CALCULATED_BUILD"
 
       - name: Upload Patched IPA to TestFlight
         script: |

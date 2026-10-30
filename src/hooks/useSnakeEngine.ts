@@ -2297,8 +2297,8 @@ export function useSnakeEngine({
     }
   }, [triggerGameOver]);
 
-  const pauseGame = useCallback((explicitPause?: boolean) => {
-    soundEngine.playClick();
+  const pauseGame = useCallback((explicitPause?: boolean, silent: boolean = false) => {
+    if (!silent) soundEngine.playClick();
     setIsPaused((p) => {
       const next = typeof explicitPause === 'boolean' ? explicitPause : !p;
       isPausedRef.current = next;

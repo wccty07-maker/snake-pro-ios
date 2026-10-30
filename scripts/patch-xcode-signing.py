@@ -7,6 +7,11 @@ pbxproj_path = sys.argv[1] if len(sys.argv) > 1 else 'ios/App/App.xcodeproj/proj
 team_id = sys.argv[2] if len(sys.argv) > 2 else os.environ.get('APPLE_TEAM_ID', 'N2S5289QDM')
 profile_name = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('PROVISIONING_PROFILE_NAME', '')
 build_number = sys.argv[4] if len(sys.argv) > 4 else os.environ.get('BUILD_NUMBER', '')
+try:
+    if build_number and int(build_number) <= 55:
+        build_number = str(int(build_number) + 60)
+except Exception:
+    pass
 
 if not os.path.exists(pbxproj_path):
     print(f"Error: {pbxproj_path} not found")

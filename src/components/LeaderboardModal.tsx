@@ -11,6 +11,7 @@ import {
   getPlayerCloudScore,
   deletePlayerScore,
   getInitialLeaderboardEntries,
+  SEED_LEADERBOARDS,
 } from '../services/leaderboardService';
 import { soundEngine } from '../utils/audio';
 import { SupportedLanguage, getTranslation } from '../utils/i18n';
@@ -307,6 +308,27 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
       }
     }
 
+    // 若紀錄未滿 20 人，自動以榮譽榜種子名單補滿 20 名 (TOP 20)，確保前 20 名名單完整呈現
+    if (list.length < 20) {
+      const seedList = SEED_LEADERBOARDS[activeMode] || SEED_LEADERBOARDS.Missions;
+      const existingUsernames = new Set(list.map((e) => (e.username || '').toLowerCase()));
+      for (let i = 0; i < seedList.length && list.length < 20; i++) {
+        const seed = seedList[i];
+        if (!existingUsernames.has(seed.username.toLowerCase())) {
+          list.push({
+            id: `seed_${activeMode}_${i}`,
+            userId: seed.username,
+            username: seed.username,
+            score: seed.score,
+            mode: activeMode,
+            formattedDate: '雲端記錄',
+            isCurrentPlayer: false,
+          });
+          existingUsernames.add(seed.username.toLowerCase());
+        }
+      }
+    }
+
     // 重新排序並校正名次 rank
     list.sort((a, b) => (b.score || 0) - (a.score || 0));
     return list.slice(0, 20).map((item, idx) => ({
@@ -576,7 +598,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
         </div>
 
         {/* Leaderboard Content List */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-3 space-y-1.5">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-3 pb-10 space-y-1.5">
           {isLoading && displayEntries.length === 0 ? (
             <div className="py-14 flex flex-col items-center justify-center gap-3 text-slate-400">
               <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />

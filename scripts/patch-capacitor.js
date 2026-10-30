@@ -17,3 +17,14 @@ if (fs.existsSync(commonFile)) {
   fs.writeFileSync(commonFile, content, 'utf8');
   console.log('[patch-capacitor] App ID validation successfully bypassed for elemall.snakegame.1');
 }
+
+// Auto-patch AppPlugin.swift if present to prevent Swift CAPPluginCall reject compilation error
+const appPluginFile = path.resolve(process.cwd(), 'node_modules/@capacitor/app/ios/Sources/AppPlugin/AppPlugin.swift');
+if (fs.existsSync(appPluginFile)) {
+  let content = fs.readFileSync(appPluginFile, 'utf8');
+  if (content.includes('call.reject("Unable to get App Info")')) {
+    content = content.replace('call.reject("Unable to get App Info")', 'call.reject("Unable to get App Info", nil, nil, nil)');
+    fs.writeFileSync(appPluginFile, content, 'utf8');
+    console.log('[patch-capacitor] AppPlugin.swift successfully patched');
+  }
+}

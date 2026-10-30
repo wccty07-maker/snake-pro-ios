@@ -6,10 +6,24 @@ import zipfile
 import plistlib
 import subprocess
 
-def patch_ipa(ipa_path, keychain_path=None):
+def patch_ipa(ipa_path, keychain_path=None, build_override=None):
     if not os.path.exists(ipa_path):
-        print(f"[IPA-Patch] Error: {ipa_path} does not exist.")
-        return False
+        candidates = [
+            ipa_path,
+            os.path.join("build", "SnakePro.ipa"),
+            os.path.join("ios", "build", "SnakePro.ipa"),
+            os.path.join("ios", "App", "build", "SnakePro.ipa"),
+        ]
+        found = False
+        for c in candidates:
+            if os.path.exists(c):
+                ipa_path = c
+                found = True
+                print(f"[IPA-Patch] Found IPA at: {ipa_path}")
+                break
+        if not found:
+            print(f"[IPA-Patch] Error: IPA file not found in candidates: {candidates}")
+            return False
 
     abs_ipa = os.path.abspath(ipa_path)
     work_dir = "/tmp/ipa_patch_work"
@@ -53,14 +67,15 @@ def patch_ipa(ipa_path, keychain_path=None):
     if "BuildMachineOSBuild" in plist_data:
         plist_data["BuildMachineOSBuild"] = "26A100"
 
-    # Apple requires CFBundleVersion to be strictly higher than previously uploaded (which was 3)
-    build_num = os.environ.get("BUILD_NUMBER")
-    if build_num:
-        plist_data["CFBundleVersion"] = str(build_num)
-    else:
-        curr_b = str(plist_data.get("CFBundleVersion", "1"))
-        if curr_b.isdigit() and int(curr_b) <= 3:
-            plist_data["CFBundleVersion"] = "4"
+    # Apple requires CFBundleVersion to be strictly higher than previously uploaded (App Store Connect latest was 55)
+    raw_build = build_override or os.environ.get("BUILD_NUMBER")
+    try:
+        b_val = int(raw_build) if raw_build else 60
+        if b_val <= 55:
+            b_val += 60
+        plist_data["CFBundleVersion"] = str(b_val)
+    except Exception:
+        plist_data["CFBundleVersion"] = "60"
 
     print(f"[IPA-Patch] Patched values -> DTSDKName: {plist_data['DTSDKName']}, DTXcode: {plist_data['DTXcode']}, CFBundleVersion: {plist_data.get('CFBundleVersion')}")
 
@@ -110,4 +125,10 @@ def patch_ipa(ipa_path, keychain_path=None):
 if __name__ == "__main__":
     ipa = sys.argv[1] if len(sys.argv) > 1 else "build/SnakePro.ipa"
     kc = sys.argv[2] if len(sys.argv) > 2 else None
-    patch_ipa(ipa, kc)
+    build_arg = sys.argv[3] if len(sys.argv) > 3 else None
+    ok = patch_ipa(ipa, kc, build_arg)
+    if not ok:
+        print("[IPA-Patch] Failed to patch IPA!")
+        sys.exit(1)
+    print("[IPA-Patch] Completed successfully.")
+    sys.exit(0)

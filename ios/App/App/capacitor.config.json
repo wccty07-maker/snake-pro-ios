@@ -10,7 +10,5 @@
 		"contentInset": "automatic",
 		"preferredContentMode": "mobile"
 	},
-	"packageClassList": [
-		"AppPlugin"
-	]
+	"packageClassList": []
 }
