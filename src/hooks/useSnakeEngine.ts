@@ -3257,7 +3257,9 @@ export function useSnakeEngine({
       const currentInterval = getSpeedRef.current();
       const elapsed = now - lastTickTime;
 
-      if (elapsed >= currentInterval) {
+      if (elapsed > currentInterval * 2) {
+        lastTickTime = now;
+      } else if (elapsed >= currentInterval) {
         lastTickTime = now - (elapsed % currentInterval);
         try {
           updateGameRef.current();

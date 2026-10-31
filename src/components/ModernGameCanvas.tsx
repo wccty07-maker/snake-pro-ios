@@ -2628,13 +2628,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         }
         lastFrameTime = now;
       } else {
-        // 4. Standard 60 FPS mode:
-        // On 120Hz ProMotion displays (now - lastFrameTime < 11ms), skip alternate frame to avoid runaway 120Hz drain.
-        // On standard 60Hz displays, render every single vsync frame with 0 dropped frames.
-        const elapsed = now - lastFrameTime;
-        if (elapsed < 11.0) {
-          return;
-        }
+        // 4. Standard high-performance mode: render synced with native screen vsync for buttery 60fps
         lastFrameTime = now;
       }
 

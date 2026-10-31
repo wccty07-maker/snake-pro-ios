@@ -37,6 +37,7 @@ class SoundEngine {
   private currentStep: number = 0;
   private noiseBuffer: AudioBuffer | null = null;
   private isHidden: boolean = false;
+  private isExternalNavActive: boolean = false;
   private isResumingAudio: boolean = false;
   private lastResumeAttempt: number = 0;
 
@@ -153,18 +154,14 @@ class SoundEngine {
   private lastVisibilityChangeTimestamp: number = 0;
 
   public handleVisibilityOrFocusChange(isVisible: boolean) {
-    const isDocVisible = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
-    const active = isVisible && isDocVisible;
+    const isDocHidden = typeof document !== 'undefined' ? document.visibilityState === 'hidden' : false;
+    const shouldBeHidden = !isVisible || isDocHidden;
 
-    const now = Date.now();
-    if (this.isHidden === !active && now - this.lastVisibilityChangeTimestamp < 200) {
-      return;
-    }
-    this.lastVisibilityChangeTimestamp = now;
-    this.isHidden = !active;
+    if (this.isHidden === shouldBeHidden) return;
+    this.isHidden = shouldBeHidden;
 
-    if (!active) {
-      // Leaving foreground / screen hidden: remember BGM state and smoothly fade to silence
+    if (this.isHidden) {
+      // Leaving foreground / screen hidden: remember BGM state and immediately pause/mute
       if (this.bgmEnabled || this.isBgmPlaying) {
         this.wasBgmPlayingBeforeHidden = true;
       }
@@ -172,28 +169,25 @@ class SoundEngine {
       if (this.bgmGainNode && this.ctx) {
         try {
           this.bgmGainNode.gain.cancelScheduledValues(0);
-          this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
-          this.bgmGainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.015);
+          this.bgmGainNode.gain.setValueAtTime(0.0001, this.ctx.currentTime);
         } catch {
           // ignore
         }
       }
-      // Delay suspend by 25ms so the 15ms exponential fade reaches true zero silence, preventing any click/beep
-      setTimeout(() => {
-        if (this.isHidden && this.ctx && this.ctx.state === 'running') {
-          try {
-            this.ctx.suspend().catch(() => {});
-          } catch {
-            // ignore
-          }
+      if (this.ctx && this.ctx.state === 'running') {
+        try {
+          this.ctx.suspend().catch(() => {});
+        } catch {
+          // ignore
         }
-      }, 25);
+      }
     } else {
       // Returning to foreground / app resumed:
+      this.isExternalNavActive = false;
       const ctxState = this.ctx ? (this.ctx.state as string) : null;
-      if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
+      if (!this.ctx || ctxState === 'closed') {
         this.recreateContext();
-      } else if (ctxState === 'suspended') {
+      } else if (ctxState === 'suspended' || ctxState === 'interrupted') {
         this.ctx.resume().catch(() => {});
       }
 
@@ -206,8 +200,7 @@ class SoundEngine {
         }
       }
 
-      if (this.bgmEnabled) {
-        this.pauseBgm();
+      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.bgmIntervalId)) {
         this.startBgm();
       }
     }
@@ -217,34 +210,43 @@ class SoundEngine {
     if (this.unlockListenersAttached || typeof window === 'undefined') return;
     this.unlockListenersAttached = true;
 
-    // Keep gesture events PERMANENTLY active so returning from Safari or external browser
-    // will instantly re-wake audio on the very first touch, even if iOS suspended it.
     const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
     const handleGesture = () => {
+      // If user navigated out to an external web page (Privacy/Terms), lock audio to dead silence
+      if (this.isExternalNavActive) return;
+
+      // 1. FAST PATH: If audio is active and running (or user intentionally disabled BGM),
+      // 0ms overhead, zero allocation, zero DOM churn!
+      // This completely eliminates touch lag / frame drops during 60fps gameplay!
+      if (
+        this.ctx &&
+        this.ctx.state === 'running' &&
+        (!this.bgmEnabled || (this.isBgmPlaying && this.bgmIntervalId !== null))
+      ) {
+        return;
+      }
+
+      // 2. User interacted with screen inside app -> ensure app is marked active and audio unlocked
+      this.isHidden = false;
       unlockHtml5Audio();
-      if (!this.isHidden) {
-        // If context was closed or interrupted, recreate it
-        if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
-          this.recreateContext();
-        } else if (this.ctx.state === 'suspended') {
-          this.ctx.resume().catch(() => {});
-        }
 
-        if (this.bgmGainNode && this.ctx) {
-          try {
-            this.bgmGainNode.gain.cancelScheduledValues(0);
-            this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
-          } catch {
-            // ignore
-          }
-        }
+      if (!this.ctx || this.ctx.state === 'closed') {
+        this.recreateContext();
+      } else if (this.ctx.state === 'suspended' || (this.ctx.state as string) === 'interrupted') {
+        this.ctx.resume().catch(() => {});
+      }
 
-        if (this.bgmEnabled) {
-          if (!this.isBgmPlaying || !this.bgmIntervalId || !this.ctx || this.ctx.state !== 'running') {
-            this.pauseBgm();
-            this.startBgm();
-          }
+      if (this.bgmGainNode && this.ctx) {
+        try {
+          this.bgmGainNode.gain.cancelScheduledValues(0);
+          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+        } catch {
+          // ignore
         }
+      }
+
+      if (this.bgmEnabled && (!this.isBgmPlaying || !this.bgmIntervalId)) {
+        this.startBgm();
       }
     };
 
@@ -268,11 +270,7 @@ class SoundEngine {
       this.handleVisibilityOrFocusChange(true);
     });
 
-    window.addEventListener('blur', () => {
-      this.handleVisibilityOrFocusChange(false);
-    });
-
-    // Native Capacitor / Cordova lifecycle hooks for app resume
+    // Native Capacitor / Cordova lifecycle hooks for app resume & pause
     const win = window as any;
     if (win.Capacitor?.Plugins?.App) {
       try {
@@ -285,6 +283,9 @@ class SoundEngine {
     }
     document.addEventListener('resume', () => {
       this.handleVisibilityOrFocusChange(true);
+    });
+    document.addEventListener('pause', () => {
+      this.handleVisibilityOrFocusChange(false);
     });
   }
 
@@ -406,6 +407,7 @@ class SoundEngine {
   }
 
   public prepareForExternalNavigation() {
+    this.isExternalNavActive = true;
     this.isHidden = true;
     if (this.bgmEnabled || this.isBgmPlaying) {
       this.wasBgmPlayingBeforeHidden = true;
@@ -413,27 +415,31 @@ class SoundEngine {
     this.pauseBgm();
     if (this.bgmGainNode && this.ctx) {
       try {
-        this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
-        this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
-        this.bgmGainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.015);
+        this.bgmGainNode.gain.cancelScheduledValues(0);
+        this.bgmGainNode.gain.setValueAtTime(0.0001, this.ctx.currentTime);
       } catch {
         // ignore
       }
     }
-    setTimeout(() => {
-      if (this.isHidden && this.ctx && this.ctx.state === 'running') {
-        try {
-          this.ctx.suspend().catch(() => {});
-        } catch {
-          // ignore
-        }
+    if (this.ctx && this.ctx.state === 'running') {
+      try {
+        this.ctx.suspend().catch(() => {});
+      } catch {
+        // ignore
       }
-    }, 25);
+    }
   }
 
   public async restoreFromExternalNavigation(): Promise<boolean> {
+    this.isExternalNavActive = false;
     this.isHidden = false;
-    this.recreateContext();
+    const ctxState = this.ctx ? (this.ctx.state as string) : null;
+    if (!this.ctx || ctxState === 'closed') {
+      this.recreateContext();
+    } else if (ctxState === 'suspended' || ctxState === 'interrupted') {
+      this.ctx.resume().catch(() => {});
+    }
+
     if (this.bgmGainNode && this.ctx) {
       try {
         this.bgmGainNode.gain.cancelScheduledValues(0);
