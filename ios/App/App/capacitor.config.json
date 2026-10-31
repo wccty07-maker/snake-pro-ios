@@ -4,7 +4,8 @@
 	"webDir": "dist",
 	"server": {
 		"androidScheme": "https",
-		"iosScheme": "capacitor"
+		"iosScheme": "capacitor",
+		"cleartext": true
 	},
 	"ios": {
 		"contentInset": "automatic",

@@ -58,6 +58,26 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
     }
   }, [language, isOpen, initialTab]);
 
+  // When returning from external browser or switching back to the app, restore sound
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleReturn = () => {
+      soundEngine.restoreFromExternalNavigation();
+    };
+    window.addEventListener('focus', handleReturn);
+    document.addEventListener('visibilitychange', handleReturn);
+    return () => {
+      window.removeEventListener('focus', handleReturn);
+      document.removeEventListener('visibilitychange', handleReturn);
+    };
+  }, [isOpen]);
+
+  const handleCloseModal = () => {
+    soundEngine.playClick();
+    soundEngine.restoreFromExternalNavigation();
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   const currentData = PRIVACY_POLICY_DATA[activeLang] || PRIVACY_POLICY_DATA['zh-HK'];
@@ -258,8 +278,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pt-[calc(max(env(safe-area-inset-top),0.5rem)+2.8rem)] pb-3 bg-slate-950/85 backdrop-blur-md animate-fade-in select-none overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          soundEngine.playClick();
-          onClose();
+          handleCloseModal();
         }
       }}
     >
@@ -284,10 +303,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => {
-              soundEngine.playClick();
-              onClose();
-            }}
+            onClick={handleCloseModal}
             className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95 shrink-0 cursor-pointer shadow-md touch-manipulation"
             aria-label="Close"
           >

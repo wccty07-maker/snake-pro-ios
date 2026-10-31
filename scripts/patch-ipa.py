@@ -70,12 +70,12 @@ def patch_ipa(ipa_path, keychain_path=None, build_override=None):
     # Apple requires CFBundleVersion to be strictly higher than previously uploaded (App Store Connect latest was 126)
     raw_build = build_override or os.environ.get("BUILD_NUMBER")
     try:
-        b_val = int(raw_build) if raw_build else 130
-        if b_val <= 126:
-            b_val += 130
+        b_val = int(raw_build) if raw_build else 150
+        if b_val <= 141:
+            b_val += 150
         plist_data["CFBundleVersion"] = str(b_val)
     except Exception:
-        plist_data["CFBundleVersion"] = "130"
+        plist_data["CFBundleVersion"] = "150"
 
     print(f"[IPA-Patch] Patched values -> DTSDKName: {plist_data['DTSDKName']}, DTXcode: {plist_data['DTXcode']}, CFBundleVersion: {plist_data.get('CFBundleVersion')}")
 

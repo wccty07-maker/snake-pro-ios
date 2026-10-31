@@ -545,7 +545,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={async () => {
                         setIsResetting(true);
                         try {
-                          await onResetData();
+                          if (onResetData) {
+                            const resetTask = Promise.resolve(onResetData());
+                            const safetyTimeout = new Promise((resolve) => setTimeout(resolve, 1200));
+                            await Promise.race([resetTask, safetyTimeout]);
+                          }
                           // 立即獲取最新派發的全新 FID
                           const freshId = getSyncCachedFID();
                           if (freshId && freshId !== 'fid_pending') {
@@ -556,7 +560,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           setTimeout(() => {
                             setResetSuccess(false);
                           }, 4500);
-                        } catch {
+                        } catch (err) {
+                          console.warn('重設進度提示:', err);
                           setIsConfirmingReset(false);
                         } finally {
                           setIsResetting(false);

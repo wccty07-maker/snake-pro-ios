@@ -157,7 +157,7 @@ class SoundEngine {
     const active = isVisible && isDocVisible;
 
     const now = Date.now();
-    if (this.isHidden === !active && now - this.lastVisibilityChangeTimestamp < 250) {
+    if (this.isHidden === !active && now - this.lastVisibilityChangeTimestamp < 200) {
       return;
     }
     this.lastVisibilityChangeTimestamp = now;
@@ -171,7 +171,7 @@ class SoundEngine {
       this.pauseBgm();
       if (this.bgmGainNode && this.ctx) {
         try {
-          this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+          this.bgmGainNode.gain.cancelScheduledValues(0);
           this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
           this.bgmGainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.015);
         } catch {
@@ -199,16 +199,15 @@ class SoundEngine {
 
       if (this.bgmGainNode && this.ctx) {
         try {
-          this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
-          this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
-          this.bgmGainNode.gain.setTargetAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime, 0.05);
+          this.bgmGainNode.gain.cancelScheduledValues(0);
+          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
         } catch {
           // ignore
         }
       }
 
       if (this.bgmEnabled) {
-        this.resumeAndRestoreAudio().catch(() => {});
+        this.pauseBgm();
         this.startBgm();
       }
     }
@@ -222,44 +221,29 @@ class SoundEngine {
     // will instantly re-wake audio on the very first touch, even if iOS suspended it.
     const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
     const handleGesture = () => {
-      // If returning to the app and BGM was supposed to be playing or enabled, resume it!
-      if (this.bgmEnabled && !this.isHidden) {
-        // If context was interrupted or dead, recreate it now that we have user interaction
+      unlockHtml5Audio();
+      if (!this.isHidden) {
+        // If context was closed or interrupted, recreate it
         if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
           this.recreateContext();
+        } else if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
         }
 
         if (this.bgmGainNode && this.ctx) {
           try {
+            this.bgmGainNode.gain.cancelScheduledValues(0);
             this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
           } catch {
             // ignore
           }
         }
 
-        if (!this.isBgmPlaying || !this.bgmIntervalId || !this.ctx || this.ctx.state !== 'running') {
-          this.resumeAndRestoreAudio().catch(() => {});
-          this.startBgm();
-        }
-      }
-
-      // Fast path: if already active and running, zero work on gameplay touch events
-      if (this.ctx && this.ctx.state === 'running' && this.isBgmPlaying && this.bgmIntervalId !== null) {
-        return;
-      }
-
-      unlockHtml5Audio();
-      this.initContext();
-      if (this.ctx && (this.ctx.state === 'suspended' || (this.ctx.state as string) === 'interrupted')) {
-        if ((this.ctx.state as string) === 'interrupted') {
-          this.recreateContext();
-        }
-        if (this.ctx) {
-          this.ctx.resume().then(() => {
-            if (this.bgmEnabled && !this.isHidden) {
-              this.startBgm();
-            }
-          }).catch(() => {});
+        if (this.bgmEnabled) {
+          if (!this.isBgmPlaying || !this.bgmIntervalId || !this.ctx || this.ctx.state !== 'running') {
+            this.pauseBgm();
+            this.startBgm();
+          }
         }
       }
     };
@@ -449,28 +433,20 @@ class SoundEngine {
 
   public async restoreFromExternalNavigation(): Promise<boolean> {
     this.isHidden = false;
-    const ctxState = this.ctx ? (this.ctx.state as string) : null;
-    if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
-      this.recreateContext();
-    } else if (ctxState === 'suspended') {
-      await this.ctx.resume().catch(() => {});
-    }
-
+    this.recreateContext();
     if (this.bgmGainNode && this.ctx) {
       try {
-        this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
-        this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
-        this.bgmGainNode.gain.setTargetAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime, 0.05);
+        this.bgmGainNode.gain.cancelScheduledValues(0);
+        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
       } catch {
         // ignore
       }
     }
-    const res = await this.resumeAndRestoreAudio();
     if (this.bgmEnabled) {
-      this.isBgmPlaying = false;
+      this.pauseBgm();
       this.startBgm();
     }
-    return res;
+    return true;
   }
 
   public async unlockAudio(): Promise<boolean> {

@@ -25,15 +25,8 @@ export const firebaseConfig = {
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth & Anonymous Sign-In (satisfies request.auth != null in security rules)
+// Initialize Firebase Auth
 export const auth: Auth = getAuth(app);
-if (typeof window !== 'undefined') {
-  onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      signInAnonymously(auth).catch(() => {});
-    }
-  });
-}
 
 // Initialize Cloud Firestore with forced long polling and pure memory cache for iOS WKWebView & mobile networks
 let firestoreDb: Firestore;

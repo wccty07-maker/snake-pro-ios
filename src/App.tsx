@@ -2004,16 +2004,7 @@ export default function App() {
     const userLang = profile.language || 'zh-HK';
     const oldFid = getOrCreatePlayerId();
 
-    // 1. 徹底銷毀舊 FID 並清除 Firestore 雲端排行榜中舊 FID 的各模式紀錄，並取得全新 FID
-    let newFid = '';
-    try {
-      const res = await deleteAllPlayerScoresFromLeaderboard(oldFid);
-      newFid = res.newFid;
-    } catch (err) {
-      console.warn('重設本地遊戲進度時清除雲端紀錄警示:', err);
-    }
-
-    // 2. 生成全新乾淨的 PlayerProfile，所有模式高分與場次徹底歸零
+    // 1. 立即生成全新乾淨的 PlayerProfile，所有模式高分與場次徹底歸零，本機零延遲生效
     const resetProfile = createDefaultPlayerProfile(userLang);
     const freshProfile: PlayerProfile = {
       ...resetProfile,
@@ -2056,6 +2047,13 @@ export default function App() {
       localStorage.setItem(STORAGE_ACHIEVEMENTS_KEY, JSON.stringify(INITIAL_ACHIEVEMENTS));
     } catch {
       // ignore
+    }
+
+    // 2. 銷毀舊 FID 並清除 Firestore 雲端排行榜中舊 FID 的各模式紀錄，並取得全新 FID
+    try {
+      await deleteAllPlayerScoresFromLeaderboard(oldFid);
+    } catch (err) {
+      console.warn('重設本地遊戲進度時清除雲端紀錄警示:', err);
     }
 
     soundEngine.playSpecialEat();
