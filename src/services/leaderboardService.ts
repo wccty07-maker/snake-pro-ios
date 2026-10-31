@@ -122,65 +122,63 @@ export async function submitScore(
   const playerDocRef = doc(db, COLLECTION_NAME, docId);
 
   try {
-    const docSnap = await getDoc(playerDocRef);
+    // 檢查現有雲端分數，設置 1200ms 快速超時防止網絡阻塞導致寫入被略過
+    let existingScore = 0;
+    try {
+      const getDocPromise = getDoc(playerDocRef);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200));
+      const docSnap = await Promise.race([getDocPromise, timeoutPromise]);
+      if (docSnap && docSnap.exists()) {
+        const data = docSnap.data();
+        existingScore = typeof data.score === 'number' ? data.score : 0;
+      }
+    } catch {
+      // 網絡或離線備援，直接繼續執行寫入
+    }
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      const existingScore = typeof data.score === 'number' ? data.score : 0;
-
-      // 3. 判斷：若大於玩家最高紀錄才更新，或 forceUpdate 強制校正污染數據
-      if (safeScore > existingScore || forceUpdate) {
-        await updateDoc(playerDocRef, {
+    // 3. 判斷：若大於玩家雲端紀錄、或 forceUpdate 強制校正、或首次上傳，一律寫入
+    if (safeScore > existingScore || forceUpdate || existingScore === 0) {
+      await setDoc(
+        playerDocRef,
+        {
           userId: currentUserId,
           username: safeUsername,
           score: safeScore,
           mode: targetMode,
           updatedAt: serverTimestamp(),
-        });
+        },
+        { merge: true }
+      );
 
-        return {
-          updated: true,
-          score: safeScore,
-          previousScore: existingScore,
-          mode: targetMode,
-          reason: 'NEW_RECORD',
-        };
-      } else {
-        // 如果分數沒突破，但使用者更新了暱稱，順便更新暱稱（必須傳齊 mode 與 score 以符合安全規則）
-        if (data.username !== safeUsername) {
-          await updateDoc(playerDocRef, {
+      return {
+        updated: true,
+        score: safeScore,
+        previousScore: existingScore,
+        mode: targetMode,
+        reason: existingScore === 0 ? 'FIRST_ENTRY' : 'NEW_RECORD',
+      };
+    } else {
+      // 如果分數未突破，但暱稱有變動，順便更新暱稱
+      if (safeUsername) {
+        await setDoc(
+          playerDocRef,
+          {
             userId: currentUserId,
             username: safeUsername,
             score: existingScore,
             mode: targetMode,
             updatedAt: serverTimestamp(),
-          }).catch(() => {});
-        }
-
-        return {
-          updated: false,
-          score: safeScore,
-          previousScore: existingScore,
-          mode: targetMode,
-          reason: 'NOT_HIGH_ENOUGH',
-        };
+          },
+          { merge: true }
+        ).catch(() => {});
       }
-    } else {
-      // 4. 初次在該模式上傳紀錄
-      await setDoc(playerDocRef, {
-        userId: currentUserId,
-        username: safeUsername,
-        score: safeScore,
-        mode: targetMode,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
 
       return {
-        updated: true,
+        updated: false,
         score: safeScore,
+        previousScore: existingScore,
         mode: targetMode,
-        reason: 'FIRST_ENTRY',
+        reason: 'NOT_HIGH_ENOUGH',
       };
     }
   } catch (error) {
@@ -644,9 +642,9 @@ export async function syncAllLocalHighScores(
   }
 
   const tasks: { mode: LeaderboardMode; score: number; forceUpdate?: boolean }[] = [
-    { mode: 'Classic', score: classicVerifiedScore, forceUpdate: isClassicCorrupted },
-    { mode: 'Missions', score: missionsScore },
-    { mode: 'Time', score: timeVerifiedScore, forceUpdate: isTimeCorrupted },
+    { mode: 'Classic', score: classicVerifiedScore, forceUpdate: true },
+    { mode: 'Missions', score: missionsScore, forceUpdate: true },
+    { mode: 'Time', score: timeVerifiedScore, forceUpdate: true },
   ];
 
   const results: Record<LeaderboardMode, SubmitScoreResult | null> = {

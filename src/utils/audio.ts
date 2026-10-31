@@ -150,40 +150,58 @@ class SoundEngine {
     };
   }
 
+  private lastVisibilityChangeTimestamp: number = 0;
+
   public handleVisibilityOrFocusChange(isVisible: boolean) {
     const isDocVisible = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
     const active = isVisible && isDocVisible;
+
+    const now = Date.now();
+    if (this.isHidden === !active && now - this.lastVisibilityChangeTimestamp < 250) {
+      return;
+    }
+    this.lastVisibilityChangeTimestamp = now;
     this.isHidden = !active;
 
     if (!active) {
-      // Leaving foreground / screen hidden: remember BGM state and pause audio immediately
+      // Leaving foreground / screen hidden: remember BGM state and smoothly fade to silence
       if (this.bgmEnabled || this.isBgmPlaying) {
         this.wasBgmPlayingBeforeHidden = true;
       }
       this.pauseBgm();
       if (this.bgmGainNode && this.ctx) {
         try {
-          this.bgmGainNode.gain.setValueAtTime(0, this.ctx.currentTime);
+          this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+          this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
+          this.bgmGainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.015);
         } catch {
           // ignore
         }
       }
-      if (this.ctx && this.ctx.state === 'running') {
-        try {
-          this.ctx.suspend().catch(() => {});
-        } catch {
-          // ignore
+      // Delay suspend by 25ms so the 15ms exponential fade reaches true zero silence, preventing any click/beep
+      setTimeout(() => {
+        if (this.isHidden && this.ctx && this.ctx.state === 'running') {
+          try {
+            this.ctx.suspend().catch(() => {});
+          } catch {
+            // ignore
+          }
         }
-      }
+      }, 25);
     } else {
-      // Returning to foreground / app resumed from browser or home:
-      // iOS WebKit CoreAudio sessions are often detached or muted when returning from Safari or external apps.
-      // Re-create the AudioContext cleanly to ensure a fresh, unblocked audio hardware pipeline.
-      this.recreateContext();
+      // Returning to foreground / app resumed:
+      const ctxState = this.ctx ? (this.ctx.state as string) : null;
+      if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
+        this.recreateContext();
+      } else if (ctxState === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
 
       if (this.bgmGainNode && this.ctx) {
         try {
-          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+          this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+          this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
+          this.bgmGainNode.gain.setTargetAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime, 0.05);
         } catch {
           // ignore
         }
@@ -411,26 +429,38 @@ class SoundEngine {
     this.pauseBgm();
     if (this.bgmGainNode && this.ctx) {
       try {
-        this.bgmGainNode.gain.setValueAtTime(0, this.ctx.currentTime);
+        this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
+        this.bgmGainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.015);
       } catch {
         // ignore
       }
     }
-    if (this.ctx && this.ctx.state === 'running') {
-      try {
-        this.ctx.suspend().catch(() => {});
-      } catch {
-        // ignore
+    setTimeout(() => {
+      if (this.isHidden && this.ctx && this.ctx.state === 'running') {
+        try {
+          this.ctx.suspend().catch(() => {});
+        } catch {
+          // ignore
+        }
       }
-    }
+    }, 25);
   }
 
   public async restoreFromExternalNavigation(): Promise<boolean> {
     this.isHidden = false;
-    this.recreateContext();
+    const ctxState = this.ctx ? (this.ctx.state as string) : null;
+    if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
+      this.recreateContext();
+    } else if (ctxState === 'suspended') {
+      await this.ctx.resume().catch(() => {});
+    }
+
     if (this.bgmGainNode && this.ctx) {
       try {
-        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+        this.bgmGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.bgmGainNode.gain.setValueAtTime(this.bgmGainNode.gain.value, this.ctx.currentTime);
+        this.bgmGainNode.gain.setTargetAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime, 0.05);
       } catch {
         // ignore
       }

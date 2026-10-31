@@ -132,7 +132,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     const currentScore = getPlayerScoreForMode(activeMode);
     if (currentScore > 0) {
       const userId = getOrCreatePlayerId();
-      submitScore(userId, userId, currentScore, activeMode)
+      submitScore(userId, userId, currentScore, activeMode, undefined, true)
         .then((res) => {
           if (res.updated) {
             console.log(`[Leaderboard] 自動同步 ${activeMode} 高分 (${res.score}) 至排行榜成功！`);

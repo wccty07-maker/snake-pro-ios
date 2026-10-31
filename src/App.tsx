@@ -598,18 +598,7 @@ export default function App() {
     soundEngine.setBgmEnabled(profile.bgmEnabled ?? true);
   }, [profile.soundEnabled, profile.bgmEnabled]);
 
-  // Background / foreground audio lifecycle listener
-  useEffect(() => {
-    const handleVisibility = () => {
-      soundEngine.handleVisibilityOrFocusChange(!document.hidden);
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', handleVisibility);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', handleVisibility);
-    };
-  }, []);
+
 
   // Heart notification toast state
   const [heartNotice, setHeartNotice] = useState<string | null>(null);
@@ -1204,11 +1193,11 @@ export default function App() {
       if (nextTotalCoins >= 10000) handleAchievementProgress('t4_coins_10000', nextTotalCoins);
 
       // 當遊戲結束時提交分數至 Firebase Firestore 排行榜 (僅限經典 CLASSIC、計時 TIME_ATTACK 等無盡模式破紀錄時提交；絕不以低分覆蓋既有高分)
-      if (!isMissionMode && isNewHigh && newBestScore > 0) {
+      if (!isMissionMode && newBestScore > 0) {
         const firestoreMode = normalizeMode(playedMode);
         const userId = getOrCreatePlayerId();
         const currentName = currentProfile.playerName || generateUniquePlayerName(currentProfile.language);
-        submitScore(userId, currentName, newBestScore, firestoreMode, currentHigh, false)
+        submitScore(userId, currentName, newBestScore, firestoreMode, undefined, isNewHigh)
           .then((result) => {
             if (result.updated) {
               console.log(`[Firebase] ${result.mode} 模式排行榜已更新最高分:`, result.score);
@@ -1331,29 +1320,14 @@ export default function App() {
       if (appView === 'PLAYING' && isPlaying && !isPaused) {
         pauseGame(true, true);
       }
-      soundEngine.handleVisibilityOrFocusChange(false);
-    };
-
-    const handleFocus = () => {
-      if (document.visibilityState === 'visible') {
-        soundEngine.handleVisibilityOrFocusChange(true);
-      }
-    };
-
-    const handleBlur = () => {
-      soundEngine.handleVisibilityOrFocusChange(false);
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('blur', handleBlur);
     };
   }, [appView, isPlaying, isPaused, pauseGame]);
 

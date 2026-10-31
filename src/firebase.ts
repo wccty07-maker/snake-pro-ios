@@ -35,11 +35,11 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Initialize Cloud Firestore with auto-detected long polling for iOS WKWebView & mobile networks
+// Initialize Cloud Firestore with forced long polling for iOS WKWebView & mobile networks
 let firestoreDb: Firestore;
 try {
   firestoreDb = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   });
 } catch {
   firestoreDb = getFirestore(app);
