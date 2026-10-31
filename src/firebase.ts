@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore, Firestore, doc, getDoc, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore, doc, getDoc, setLogLevel, memoryLocalCache } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getInstallations, getId, deleteInstallations, Installations } from 'firebase/installations';
 import { getAuth, signInAnonymously, onAuthStateChanged, Auth } from 'firebase/auth';
@@ -35,11 +35,12 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Initialize Cloud Firestore with forced long polling for iOS WKWebView & mobile networks
+// Initialize Cloud Firestore with forced long polling and pure memory cache for iOS WKWebView & mobile networks
 let firestoreDb: Firestore;
 try {
   firestoreDb = initializeFirestore(app, {
     experimentalForceLongPolling: true,
+    localCache: memoryLocalCache(),
   });
 } catch {
   firestoreDb = getFirestore(app);
