@@ -109,7 +109,8 @@ class SoundEngine {
 
       // Re-create master BGM gain node attached to the fresh context
       this.bgmGainNode = this.ctx.createGain();
-      this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+      this.bgmGainNode.gain.cancelScheduledValues(0);
+      this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
       this.bgmGainNode.connect(this.ctx.destination);
 
       return this.ctx;
@@ -166,10 +167,10 @@ class SoundEngine {
         this.wasBgmPlayingBeforeHidden = true;
       }
       this.pauseBgm();
-      if (this.bgmGainNode && this.ctx) {
+      if (this.bgmGainNode) {
         try {
           this.bgmGainNode.gain.cancelScheduledValues(0);
-          this.bgmGainNode.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+          this.bgmGainNode.gain.value = 0.0001;
         } catch {
           // ignore
         }
@@ -185,22 +186,36 @@ class SoundEngine {
       // Returning to foreground / app resumed:
       this.isExternalNavActive = false;
       const ctxState = this.ctx ? (this.ctx.state as string) : null;
-      if (!this.ctx || ctxState === 'closed') {
+      if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
         this.recreateContext();
-      } else if (ctxState === 'suspended' || ctxState === 'interrupted') {
+      } else if (ctxState === 'suspended') {
         this.ctx.resume().catch(() => {});
       }
 
-      if (this.bgmGainNode && this.ctx) {
+      if (this.bgmGainNode) {
         try {
           this.bgmGainNode.gain.cancelScheduledValues(0);
-          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+          this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
+        } catch {
+          // ignore
+        }
+      }
+
+      // iOS WebKit silent buffer trigger to force CoreAudio output routing
+      if (this.ctx) {
+        try {
+          const buf = this.ctx.createBuffer(1, 1, 22050);
+          const s = this.ctx.createBufferSource();
+          s.buffer = buf;
+          s.connect(this.ctx.destination);
+          s.start(0);
         } catch {
           // ignore
         }
       }
 
       if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.bgmIntervalId)) {
+        this.pauseBgm();
         this.startBgm();
       }
     }
@@ -217,7 +232,6 @@ class SoundEngine {
 
       // 1. FAST PATH: If audio is active and running (or user intentionally disabled BGM),
       // 0ms overhead, zero allocation, zero DOM churn!
-      // This completely eliminates touch lag / frame drops during 60fps gameplay!
       if (
         this.ctx &&
         this.ctx.state === 'running' &&
@@ -230,22 +244,37 @@ class SoundEngine {
       this.isHidden = false;
       unlockHtml5Audio();
 
-      if (!this.ctx || this.ctx.state === 'closed') {
+      const ctxState = this.ctx ? (this.ctx.state as string) : null;
+      if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
         this.recreateContext();
-      } else if (this.ctx.state === 'suspended' || (this.ctx.state as string) === 'interrupted') {
+      } else if (ctxState === 'suspended') {
         this.ctx.resume().catch(() => {});
       }
 
-      if (this.bgmGainNode && this.ctx) {
+      if (this.bgmGainNode) {
         try {
           this.bgmGainNode.gain.cancelScheduledValues(0);
-          this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+          this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
+        } catch {
+          // ignore
+        }
+      }
+
+      // iOS silent buffer trigger
+      if (this.ctx) {
+        try {
+          const buf = this.ctx.createBuffer(1, 1, 22050);
+          const s = this.ctx.createBufferSource();
+          s.buffer = buf;
+          s.connect(this.ctx.destination);
+          s.start(0);
         } catch {
           // ignore
         }
       }
 
       if (this.bgmEnabled && (!this.isBgmPlaying || !this.bgmIntervalId)) {
+        this.pauseBgm();
         this.startBgm();
       }
     };
@@ -434,20 +463,33 @@ class SoundEngine {
     this.isExternalNavActive = false;
     this.isHidden = false;
     const ctxState = this.ctx ? (this.ctx.state as string) : null;
-    if (!this.ctx || ctxState === 'closed') {
+    if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
       this.recreateContext();
-    } else if (ctxState === 'suspended' || ctxState === 'interrupted') {
+    } else if (ctxState === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
 
-    if (this.bgmGainNode && this.ctx) {
+    if (this.bgmGainNode) {
       try {
         this.bgmGainNode.gain.cancelScheduledValues(0);
-        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+        this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
       } catch {
         // ignore
       }
     }
+
+    if (this.ctx) {
+      try {
+        const buf = this.ctx.createBuffer(1, 1, 22050);
+        const s = this.ctx.createBufferSource();
+        s.buffer = buf;
+        s.connect(this.ctx.destination);
+        s.start(0);
+      } catch {
+        // ignore
+      }
+    }
+
     if (this.bgmEnabled) {
       this.pauseBgm();
       this.startBgm();
@@ -463,7 +505,12 @@ class SoundEngine {
     if (typeof window === 'undefined') return null;
 
     if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
-      return this.recreateContext();
+      const res = this.recreateContext();
+      if (this.bgmEnabled && !this.isHidden && !this.isExternalNavActive) {
+        this.pauseBgm();
+        this.startBgm();
+      }
+      return res;
     }
 
     const state = this.ctx.state as string;
@@ -471,12 +518,12 @@ class SoundEngine {
       this.ctx.resume().catch(() => {});
     }
 
-
     // Ensure BGM gain node is bound to current context
     if (!this.bgmGainNode || this.bgmGainNode.context !== this.ctx) {
       try {
         this.bgmGainNode = this.ctx.createGain();
-        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, this.ctx.currentTime);
+        this.bgmGainNode.gain.cancelScheduledValues(0);
+        this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
         this.bgmGainNode.connect(this.ctx.destination);
       } catch {
         // ignore
@@ -721,7 +768,8 @@ class SoundEngine {
         }
       }
       try {
-        this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, audioCtx.currentTime);
+        this.bgmGainNode.gain.cancelScheduledValues(0);
+        this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
       } catch {
         // ignore
       }
