@@ -9,6 +9,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
+        window?.backgroundColor = UIColor(red: 6.0/255.0, green: 9.0/255.0, blue: 20.0/255.0, alpha: 1.0)
         window?.rootViewController = CAPBridgeViewController()
         window?.makeKeyAndVisible()
 
@@ -23,12 +24,37 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
     }
 
-    func sceneDidBecomeActive(_ scene: UIScene) {
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        // App is returning to foreground: reactivate audio session as .ambient
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            // ignore
+            print("[SceneDelegate] AVAudioSession willEnterForeground error: \(error)")
         }
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        // App is active: ensure ambient game audio session is active
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("[SceneDelegate] AVAudioSession didBecomeActive error: \(error)")
+        }
+    }
+
+    func sceneWillResignActive(_ scene: UIScene) {
+        // Immediately mute audio session when app loses active focus (swiping to home / switching apps)
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {}
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        // Guarantee complete silence in background
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {}
     }
 }

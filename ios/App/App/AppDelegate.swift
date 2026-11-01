@@ -39,15 +39,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state.
+        // Mute audio session immediately when moving to inactive state
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {}
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Sent when the application entered background. Audio muting is gracefully handled in WKWebView via pause().
+        // Guarantee silence in background
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {}
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state.
+        // Reactivate audio session upon returning to app from background
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("[AppDelegate] AVAudioSession foreground error: \(error)")
+        }
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
@@ -61,7 +73,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
     }
 
     func application(_ application: UIApplication,

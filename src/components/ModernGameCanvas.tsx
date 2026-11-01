@@ -2691,6 +2691,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
     const onResume = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         startOrRestartLoop();
+        soundEngine.handleVisibilityOrFocusChange(true);
       }
     };
 
@@ -2704,6 +2705,7 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
         win.Capacitor.Plugins.App.addListener('appStateChange', (state: { isActive: boolean }) => {
           if (state.isActive) {
             startOrRestartLoop();
+            soundEngine.handleVisibilityOrFocusChange(true);
           }
         });
       } catch {}

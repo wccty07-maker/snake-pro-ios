@@ -1320,14 +1320,21 @@ export default function App() {
       if (appView === 'PLAYING' && isPlaying && !isPaused) {
         pauseGame(true, true);
       }
+      soundEngine.handleVisibilityOrFocusChange(false);
+    };
+
+    const handlePageShow = () => {
+      soundEngine.handleVisibilityOrFocusChange(true);
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [appView, isPlaying, isPaused, pauseGame]);
 

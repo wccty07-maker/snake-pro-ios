@@ -13,5 +13,7 @@
 		"preferredContentMode": "mobile",
 		"backgroundColor": "#060914"
 	},
-	"packageClassList": []
+	"packageClassList": [
+		"AppPlugin"
+	]
 }

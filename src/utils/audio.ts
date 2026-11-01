@@ -4,11 +4,16 @@
  * with multi-part melodies and layered instrumentation without external audio files.
  */
 
+import { App } from '@capacitor/app';
+
 const MASTER_BGM_VOLUME = 0.35;
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
+  private masterGainNode: GainNode | null = null;
   private soundEnabled: boolean = true;
   private bgmEnabled: boolean = true;
+  private rawBgmArrayBuffer: ArrayBuffer | null = null;
   private bgmAudioBuffer: AudioBuffer | null = null;
   private bgmSource: AudioBufferSourceNode | null = null;
   private bgmGainNode: GainNode | null = null;
@@ -29,7 +34,6 @@ class SoundEngine {
   private isUnlockedState: boolean = false;
   private unlockListenersAttached: boolean = false;
   private unlockCallbacks: Array<() => void> = [];
-  private gestureRemover: (() => void) | null = null;
 
   constructor() {
     try {
@@ -45,11 +49,18 @@ class SoundEngine {
     if (typeof window !== 'undefined') {
       this.attachAutoUnlockListeners();
       try {
-        this.initContext();
+        this.getOrCreateContext();
       } catch {
         // ignore
       }
     }
+  }
+
+  public getDestination(ctx: AudioContext): AudioNode {
+    if (this.masterGainNode && this.masterGainNode.context === ctx) {
+      return this.masterGainNode;
+    }
+    return ctx.destination;
   }
 
   private startKeepAlive(ctx: AudioContext) {
@@ -62,12 +73,12 @@ class SoundEngine {
       source.loop = true;
 
       const gain = ctx.createGain();
-      // 0.0001 gain: below -80dB (inaudible digital silence), but informs iOS CoreAudio
-      // that an active audio stream is running so the hardware DAC speaker amplifier never goes to sleep!
+      // 0.0001 gain: inaudible (-80dB), but informs iOS CoreAudio that an active audio stream
+      // is running so the hardware DAC speaker amplifier never goes into a cold sleep!
       gain.gain.value = 0.0001;
 
       source.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       source.start(0);
 
       this.keepAliveNode = source;
@@ -93,45 +104,7 @@ class SoundEngine {
     }
   }
 
-  private cleanupContext() {
-    this.stopKeepAlive();
-    this.noiseBuffer = null;
-    if (this.ctx) {
-      try {
-        if (this.ctx.state !== 'closed') {
-          this.ctx.close().catch(() => {});
-        }
-      } catch {
-        // ignore
-      }
-      this.ctx = null;
-    }
-  }
-
-  private recreateContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null;
-    this.cleanupContext();
-
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return null;
-
-    try {
-      this.ctx = new AudioCtx();
-      this.setupContextStateListener(this.ctx);
-      if (this.ctx.state === 'running') {
-        this.startKeepAlive(this.ctx);
-      }
-      return this.ctx;
-    } catch (err) {
-      console.warn('[SoundEngine] Failed to recreate AudioContext:', err);
-      this.ctx = null;
-      return null;
-    }
-  }
-
-  public ensureAudioContextActive(): AudioContext | null {
+  private getOrCreateContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
 
     const AudioCtx =
@@ -139,38 +112,39 @@ class SoundEngine {
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return null;
 
-    if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
-      try {
-        if (this.ctx && this.ctx.state !== 'closed') {
-          this.ctx.close().catch(() => {});
-        }
-      } catch {}
-      this.stopKeepAlive();
+    // CRITICAL: NEVER destroy or recreate the AudioContext on 'interrupted' or 'suspended'!
+    // On iOS WebKit, an already unlocked AudioContext keeps its user-gesture activation!
+    // If you recreate it, the new context is permanently blocked until another user gesture.
+    if (!this.ctx || this.ctx.state === 'closed') {
       try {
         this.ctx = new AudioCtx();
         this.setupContextStateListener(this.ctx);
-      } catch {
+        // Clear decoded buffer cache if a brand new context was instantiated
+        this.bgmAudioBuffer = null;
+      } catch (err) {
+        console.warn('[SoundEngine] Failed to create AudioContext:', err);
+        this.ctx = null;
         return null;
       }
     }
 
-    const state = this.ctx.state as string;
-    if (state === 'suspended' || state === 'interrupted') {
-      this.ctx.resume().catch(() => {
-        try {
-          this.stopKeepAlive();
-          this.ctx = new AudioCtx();
-          this.setupContextStateListener(this.ctx);
-          this.ctx.resume().catch(() => {});
-        } catch {}
-      });
-    }
-
-    if (this.ctx.state === 'running') {
-      this.startKeepAlive(this.ctx);
+    if (this.ctx && (!this.masterGainNode || this.masterGainNode.context !== this.ctx)) {
+      try {
+        this.masterGainNode = this.ctx.createGain();
+        this.masterGainNode.gain.value = this.isHidden ? 0 : 1.0;
+        this.masterGainNode.connect(this.ctx.destination);
+      } catch {}
     }
 
     return this.ctx;
+  }
+
+  public ensureAudioContextActive(): AudioContext | null {
+    const ctx = this.getOrCreateContext();
+    if (ctx && (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted')) {
+      ctx.resume().catch(() => {});
+    }
+    return ctx;
   }
 
   private setupContextStateListener(ctx: AudioContext) {
@@ -178,7 +152,9 @@ class SoundEngine {
       const state = ctx.state as string;
       if (state === 'running') {
         this.isUnlockedState = true;
-        this.startKeepAlive(ctx);
+        if (!this.isHidden) {
+          this.startKeepAlive(ctx);
+        }
         const cbs = [...this.unlockCallbacks];
         this.unlockCallbacks = [];
         cbs.forEach((cb) => {
@@ -192,8 +168,6 @@ class SoundEngine {
     };
   }
 
-  private lastVisibilityChangeTimestamp: number = 0;
-
   public handleVisibilityOrFocusChange(isVisible: boolean) {
     const isDocHidden = typeof document !== 'undefined' ? document.visibilityState === 'hidden' : false;
     const shouldBeHidden = !isVisible || isDocHidden;
@@ -202,25 +176,79 @@ class SoundEngine {
     this.isHidden = shouldBeHidden;
 
     if (this.isHidden) {
-      // Leaving foreground / screen hidden: remember BGM state and immediately pause cleanly
+      // Leaving foreground / screen hidden:
+      // 1. Remember if BGM was actively playing
       if (this.bgmEnabled && this.isBgmPlaying) {
         this.wasBgmPlayingBeforeHidden = true;
       }
+      // 2. Immediately stop BGM node
       this.pauseBgm();
+      // 3. Immediately stop Keep-Alive DAC node
       this.stopKeepAlive();
-      // Note: We deliberately do NOT manually call this.ctx.suspend() here!
-      // On iOS WebKit, calling suspend() explicitly imposes an artificial user-gesture lock on return,
-      // which prevents eating/gameplay sound effects from playing when BGM is disabled.
+      // 4. Mute master gain node to 0 instantly (ensures 0 sound leak to home screen)
+      if (this.masterGainNode && this.ctx) {
+        try {
+          this.masterGainNode.gain.cancelScheduledValues(0);
+          this.masterGainNode.gain.setValueAtTime(0, this.ctx.currentTime);
+        } catch {}
+      }
+      // 5. Suspend context so WebAudio thread pauses entirely
+      if (this.ctx && this.ctx.state === 'running') {
+        try {
+          this.ctx.suspend().catch(() => {});
+        } catch {}
+      }
     } else {
       // Returning to foreground / app resumed:
       this.isExternalNavActive = false;
 
-      // Ensure AudioContext is recovered and DAC is warmed up
-      this.ensureAudioContextActive();
+      // Staged recovery: try immediately, at 60ms, 180ms, 350ms, 600ms
+      // to seamlessly synchronize with the native iOS AVAudioSession awakening
+      this.resumeAudioPipeline();
+      setTimeout(() => this.resumeAudioPipeline(), 60);
+      setTimeout(() => this.resumeAudioPipeline(), 180);
+      setTimeout(() => this.resumeAudioPipeline(), 350);
+      setTimeout(() => this.resumeAudioPipeline(), 600);
+    }
+  }
 
-      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.isBgmPlaying)) {
-        this.startBgm();
+  public async resumeAudioPipeline() {
+    if (this.isHidden || typeof window === 'undefined') return;
+
+    const ctx = this.getOrCreateContext();
+    if (!ctx) return;
+
+    // 1. Recover WebKit AudioContext state using proven PlayCanvas/WebKit workaround:
+    // If state is interrupted or suspended, suspend then resume to unfreeze the hardware unit
+    if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+      try {
+        if (typeof ctx.suspend === 'function') {
+          await ctx.suspend();
+        }
+      } catch {}
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn('[SoundEngine] ctx.resume error:', err);
       }
+    }
+
+    // 2. Unmute master gain back to 1.0
+    if (this.masterGainNode && this.masterGainNode.context === ctx) {
+      try {
+        this.masterGainNode.gain.cancelScheduledValues(0);
+        this.masterGainNode.gain.setValueAtTime(1.0, ctx.currentTime);
+      } catch {}
+    }
+
+    // 3. Restart DAC keep-alive to keep the amplifier awake
+    if (ctx.state === 'running') {
+      this.startKeepAlive(ctx);
+    }
+
+    // 4. Restart BGM if enabled
+    if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.isBgmPlaying)) {
+      await this.startBgm();
     }
   }
 
@@ -230,27 +258,8 @@ class SoundEngine {
 
     const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
     const handleGesture = () => {
-      // If user navigated out to an external web page (Privacy/Terms), lock audio to dead silence
-      if (this.isExternalNavActive) return;
-
-      this.isHidden = false;
-
-      const ctx = this.ensureAudioContextActive();
-
-      // Trigger 1-sample silent Web Audio buffer inside user gesture to physically unlock hardware routing
-      if (ctx && ctx.state === 'running') {
-        try {
-          const buf = ctx.createBuffer(1, 1, 22050);
-          const s = ctx.createBufferSource();
-          s.buffer = buf;
-          s.connect(ctx.destination);
-          s.start(0);
-        } catch {}
-      }
-
-      if (this.bgmEnabled && (!this.isBgmPlaying || !this.bgmSource)) {
-        this.startBgm();
-      }
+      if (this.isExternalNavActive || this.isHidden) return;
+      this.resumeAudioPipeline();
     };
 
     gestureEvents.forEach((ev) => {
@@ -273,17 +282,15 @@ class SoundEngine {
       this.handleVisibilityOrFocusChange(true);
     });
 
-    // Native Capacitor / Cordova lifecycle hooks for app resume & pause
-    const win = window as any;
-    if (win.Capacitor?.Plugins?.App) {
-      try {
-        win.Capacitor.Plugins.App.addListener('appStateChange', (state: { isActive: boolean }) => {
-          this.handleVisibilityOrFocusChange(state.isActive);
-        });
-      } catch {
-        // ignore
-      }
+    // Native Capacitor App lifecycle events
+    try {
+      App.addListener('appStateChange', (state) => {
+        this.handleVisibilityOrFocusChange(state.isActive);
+      });
+    } catch {
+      // ignore
     }
+
     document.addEventListener('resume', () => {
       this.handleVisibilityOrFocusChange(true);
     });
@@ -310,29 +317,8 @@ class SoundEngine {
 
   public async resumeAndRestoreAudio(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
-    if (this.isResumingAudio) {
-      return !!this.ctx && this.ctx.state === 'running';
-    }
-    const nowTime = Date.now();
-    if (nowTime - this.lastResumeAttempt < 100) {
-      return !!this.ctx && this.ctx.state === 'running';
-    }
-    this.lastResumeAttempt = nowTime;
-    this.isResumingAudio = true;
-
-    try {
-      const ctx = this.ensureAudioContextActive();
-
-      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.isBgmPlaying)) {
-        this.startBgm();
-      }
-
-      return !!ctx && ctx.state === 'running';
-    } catch {
-      return false;
-    } finally {
-      this.isResumingAudio = false;
-    }
+    await this.resumeAudioPipeline();
+    return !!this.ctx && this.ctx.state === 'running';
   }
 
   private autoCleanup(...nodes: (AudioNode | null | undefined)[]) {
@@ -362,21 +348,12 @@ class SoundEngine {
 
   public prepareForExternalNavigation() {
     this.isExternalNavActive = true;
-    this.isHidden = true;
-    if (this.bgmEnabled && this.isBgmPlaying) {
-      this.wasBgmPlayingBeforeHidden = true;
-    }
-    this.pauseBgm();
-    this.stopKeepAlive();
+    this.handleVisibilityOrFocusChange(false);
   }
 
   public async restoreFromExternalNavigation(): Promise<boolean> {
     this.isExternalNavActive = false;
-    this.isHidden = false;
-    this.ensureAudioContextActive();
-    if (this.bgmEnabled) {
-      this.startBgm();
-    }
+    this.handleVisibilityOrFocusChange(true);
     return true;
   }
 
@@ -384,8 +361,12 @@ class SoundEngine {
     return this.resumeAndRestoreAudio();
   }
 
-  private initContext(): AudioContext | null {
-    return this.ensureAudioContextActive();
+  public initContext(): AudioContext | null {
+    const ctx = this.getOrCreateContext();
+    if (ctx && (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted')) {
+      ctx.resume().catch(() => {});
+    }
+    return ctx;
   }
 
   private getNoiseBuffer(ctx: AudioContext): AudioBuffer {
@@ -406,7 +387,7 @@ class SoundEngine {
     this.soundEnabled = enabled;
     localStorage.setItem('snake_pro_sound', String(enabled));
     if (enabled) {
-      this.ensureAudioContextActive();
+      this.resumeAudioPipeline();
     } else {
       this.stopKeepAlive();
     }
@@ -446,14 +427,28 @@ class SoundEngine {
 
   private async loadBgmBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
     if (this.bgmAudioBuffer) return this.bgmAudioBuffer;
-    if (this.isLoadingBgm || typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') return null;
+
+    if (this.isLoadingBgm) {
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (this.bgmAudioBuffer) return this.bgmAudioBuffer;
+        if (!this.isLoadingBgm) break;
+      }
+      if (this.bgmAudioBuffer) return this.bgmAudioBuffer;
+    }
+
     this.isLoadingBgm = true;
 
     try {
-      const bgmUrl = new URL('assets/bgm_fantasy.mp3', window.location.href).href;
-      const resp = await fetch(bgmUrl);
-      const arrayBuffer = await resp.arrayBuffer();
-      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      if (!this.rawBgmArrayBuffer) {
+        const bgmUrl = new URL('assets/bgm_fantasy.mp3', window.location.href).href;
+        const resp = await fetch(bgmUrl);
+        this.rawBgmArrayBuffer = await resp.arrayBuffer();
+      }
+      // Pass a sliced copy so rawBgmArrayBuffer is never detached by decodeAudioData
+      const copy = this.rawBgmArrayBuffer.slice(0);
+      const decoded = await ctx.decodeAudioData(copy);
       this.bgmAudioBuffer = decoded;
       return decoded;
     } catch (err) {
@@ -476,13 +471,26 @@ class SoundEngine {
       return;
     }
 
-    const ctx = this.ensureAudioContextActive();
+    const ctx = this.getOrCreateContext();
     if (!ctx) return;
 
     this.isBgmPlaying = true;
     this.wasBgmPlayingBeforeHidden = true;
 
-    if (this.bgmSource) return;
+    if (this.bgmSource) {
+      if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+        try {
+          await ctx.resume();
+        } catch {}
+      }
+      return;
+    }
+
+    if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+      try {
+        await ctx.resume();
+      } catch {}
+    }
 
     let buffer = this.bgmAudioBuffer;
     if (!buffer) {
@@ -493,7 +501,7 @@ class SoundEngine {
     try {
       if (!this.bgmGainNode || this.bgmGainNode.context !== ctx) {
         this.bgmGainNode = ctx.createGain();
-        this.bgmGainNode.connect(ctx.destination);
+        this.bgmGainNode.connect(this.getDestination(ctx));
       }
       this.bgmGainNode.gain.cancelScheduledValues(0);
       this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
@@ -505,8 +513,8 @@ class SoundEngine {
       source.start(0);
 
       this.bgmSource = source;
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[SoundEngine] startBgm error:', err);
     }
   }
 
@@ -548,7 +556,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -581,7 +589,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -613,7 +621,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now);
@@ -645,7 +653,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now);
@@ -678,7 +686,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now);
@@ -711,7 +719,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(t);
@@ -743,7 +751,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -774,7 +782,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -805,7 +813,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -836,7 +844,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -874,7 +882,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -908,7 +916,7 @@ class SoundEngine {
 
       osc1.connect(gain);
       osc2.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc2, osc1, gain);
 
       osc1.start(now);
@@ -941,7 +949,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -974,7 +982,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.38);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now + i * 0.08);
@@ -1008,7 +1016,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.35);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now + i * 0.1);
@@ -1039,7 +1047,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -1069,7 +1077,7 @@ class SoundEngine {
         gain.gain.setValueAtTime(0.12, now + idx * 0.04);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.35);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
         osc.start(now + idx * 0.04);
         osc.stop(now + idx * 0.04 + 0.36);
@@ -1102,7 +1110,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
         osc.start(now);
         osc.stop(now + 0.42);
@@ -1131,7 +1139,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.5);
@@ -1171,7 +1179,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.04);
@@ -1197,7 +1205,7 @@ class SoundEngine {
         gain.gain.setValueAtTime(0.15, now + i * 0.06);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
         osc.start(now + i * 0.06);
         osc.stop(now + i * 0.06 + 0.26);
@@ -1224,7 +1232,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.35, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.6);
@@ -1250,7 +1258,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.05, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.08);
@@ -1277,7 +1285,7 @@ class SoundEngine {
         gain.gain.setValueAtTime(0.12, now + idx * 0.05);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.4);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.42);
@@ -1305,7 +1313,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.18, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.26);
@@ -1331,7 +1339,7 @@ class SoundEngine {
         gain.gain.setValueAtTime(0.12, now + i * 0.04);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.3);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
         osc.start(now + i * 0.04);
         osc.stop(now + i * 0.04 + 0.32);
@@ -1357,7 +1365,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.15, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
       osc.start(now);
       osc.stop(now + 0.2);
@@ -1387,7 +1395,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -1425,7 +1433,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.2);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now + idx * 0.08);
@@ -1455,7 +1463,7 @@ class SoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
       osc.start(now);
@@ -1487,7 +1495,7 @@ class SoundEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.18);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.getDestination(ctx));
       this.autoCleanup(osc, gain);
 
         osc.start(now + idx * 0.1);
