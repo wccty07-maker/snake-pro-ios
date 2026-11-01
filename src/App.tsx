@@ -2077,12 +2077,12 @@ export default function App() {
 
     const successMsg =
       userLang === 'en'
-        ? '🔄 Progress reset! Cloud rankings cleared & new FID assigned.'
+        ? '🔄 Progress reset! Cloud rankings cleared.'
         : userLang === 'ja'
-        ? '🔄 初期化完了！クラウド記録を削除し新しいFIDを発行しました。'
+        ? '🔄 初期化完了！クラウド記録を削除しました。'
         : userLang === 'zh-CN'
-        ? '🔄 已成功重设！云端排行榜排名已移除，已派发全新玩家 FID。'
-        : '🔄 已成功重設！雲端排行榜排名已移除，已派發全新玩家 FID。';
+        ? '🔄 已成功重设！云端排行榜排名已移除。'
+        : '🔄 已成功重設！雲端排行榜排名已移除。';
     showHeartNotice(successMsg);
   }, [profile.language, profile.hasCustomLanguage, profile.soundEnabled, profile.bgmEnabled, todayStr, showHeartNotice]);
 

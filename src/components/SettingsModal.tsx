@@ -587,12 +587,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span className="leading-snug text-center">
                     {currentLang === 'zh-CN'
-                      ? '已成功重设！云端排名已清空，并已派发全新 FID。'
+                      ? '已成功重设！云端排名已清空。'
                       : currentLang === 'en'
-                      ? 'Reset complete! Cloud ranking cleared & fresh FID assigned.'
+                      ? 'Reset complete! Cloud ranking cleared.'
                       : currentLang === 'ja'
-                      ? '初期化完了！クラウド順位をリセットし、新しいFIDを発行しました。'
-                      : '已成功重設！雲端排名已清空，並已派發全新 FID。'}
+                      ? '初期化完了！クラウド順位をリセットしました。'
+                      : '已成功重設！雲端排名已清空。'}
                   </span>
                 </div>
               )}
