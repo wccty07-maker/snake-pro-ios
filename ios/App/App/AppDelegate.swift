@@ -36,20 +36,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state.
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            print("[AppDelegate] AVAudioSession resignActive error: \(error)")
-        }
+        // Note: Do NOT call AVAudioSession.setActive(false) here, as cutting off active hardware audio buffers
+        // causes an audible DC-offset pop ("beep" / crackle) and corrupts WebKit's audio pipeline upon returning.
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources and guarantee zero background audio.
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            print("[AppDelegate] AVAudioSession didEnterBackground error: \(error)")
-        }
+        // Sent when the application entered background. Audio muting is gracefully handled in WKWebView via pause().
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
