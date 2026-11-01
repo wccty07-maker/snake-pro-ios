@@ -39,6 +39,10 @@ class SoundEngine {
   private isResumingAudio: boolean = false;
   private lastResumeAttempt: number = 0;
 
+  // iOS Web Audio DAC Keep-Alive (prevents iOS hardware amplifier from sleeping when BGM is off)
+  private keepAliveNode: AudioBufferSourceNode | null = null;
+  private keepAliveGain: GainNode | null = null;
+
   // iOS audio state
   private isUnlockedState: boolean = false;
   private unlockListenersAttached: boolean = false;
@@ -66,7 +70,49 @@ class SoundEngine {
     }
   }
 
+  private startKeepAlive(ctx: AudioContext) {
+    if (this.keepAliveNode || typeof window === 'undefined' || this.isHidden) return;
+    try {
+      // 1-second silent buffer looping continuously
+      const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+
+      const gain = ctx.createGain();
+      // 0.0001 gain: below -80dB (inaudible digital silence), but informs iOS CoreAudio
+      // that an active audio stream is running so the hardware DAC speaker amplifier never goes to sleep!
+      gain.gain.value = 0.0001;
+
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start(0);
+
+      this.keepAliveNode = source;
+      this.keepAliveGain = gain;
+    } catch {
+      // ignore
+    }
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveNode) {
+      try {
+        this.keepAliveNode.stop();
+        this.keepAliveNode.disconnect();
+      } catch {}
+      this.keepAliveNode = null;
+    }
+    if (this.keepAliveGain) {
+      try {
+        this.keepAliveGain.disconnect();
+      } catch {}
+      this.keepAliveGain = null;
+    }
+  }
+
   private cleanupContext() {
+    this.stopKeepAlive();
     this.noiseBuffer = null;
     if (this.ctx) {
       try {
@@ -92,6 +138,9 @@ class SoundEngine {
     try {
       this.ctx = new AudioCtx();
       this.setupContextStateListener(this.ctx);
+      if (this.ctx.state === 'running') {
+        this.startKeepAlive(this.ctx);
+      }
       return this.ctx;
     } catch (err) {
       console.warn('[SoundEngine] Failed to recreate AudioContext:', err);
@@ -100,11 +149,54 @@ class SoundEngine {
     }
   }
 
+  public ensureAudioContextActive(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return null;
+
+    if (!this.ctx || this.ctx.state === 'closed' || (this.ctx.state as string) === 'interrupted') {
+      try {
+        if (this.ctx && this.ctx.state !== 'closed') {
+          this.ctx.close().catch(() => {});
+        }
+      } catch {}
+      this.stopKeepAlive();
+      try {
+        this.ctx = new AudioCtx();
+        this.setupContextStateListener(this.ctx);
+      } catch {
+        return null;
+      }
+    }
+
+    const state = this.ctx.state as string;
+    if (state === 'suspended' || state === 'interrupted') {
+      this.ctx.resume().catch(() => {
+        try {
+          this.stopKeepAlive();
+          this.ctx = new AudioCtx();
+          this.setupContextStateListener(this.ctx);
+          this.ctx.resume().catch(() => {});
+        } catch {}
+      });
+    }
+
+    if (this.ctx.state === 'running') {
+      this.startKeepAlive(this.ctx);
+    }
+
+    return this.ctx;
+  }
+
   private setupContextStateListener(ctx: AudioContext) {
     ctx.onstatechange = () => {
       const state = ctx.state as string;
       if (state === 'running') {
         this.isUnlockedState = true;
+        this.startKeepAlive(ctx);
         const cbs = [...this.unlockCallbacks];
         this.unlockCallbacks = [];
         cbs.forEach((cb) => {
@@ -133,28 +225,17 @@ class SoundEngine {
         this.wasBgmPlayingBeforeHidden = true;
       }
       this.pauseBgm();
-
-      // Cleanly suspend Web Audio context for SFX without pops
-      if (this.ctx && this.ctx.state === 'running') {
-        try {
-          this.ctx.suspend().catch(() => {});
-        } catch {
-          // ignore
-        }
-      }
+      this.stopKeepAlive();
+      // Note: We deliberately do NOT manually call this.ctx.suspend() here!
+      // On iOS WebKit, calling suspend() explicitly imposes an artificial user-gesture lock on return,
+      // which prevents eating/gameplay sound effects from playing when BGM is disabled.
     } else {
       // Returning to foreground / app resumed:
       this.isExternalNavActive = false;
 
-      // 1. Resume Web Audio context for SFX
-      if (this.ctx) {
-        const ctxState = this.ctx.state as string;
-        if (ctxState === 'suspended' || ctxState === 'interrupted') {
-          this.ctx.resume().catch(() => {});
-        }
-      }
+      // Ensure AudioContext is recovered and DAC is warmed up
+      this.ensureAudioContextActive();
 
-      // 2. Resume BGM immediately
       if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.bgmAudio || this.bgmAudio.paused)) {
         this.startBgm();
       }
@@ -173,8 +254,17 @@ class SoundEngine {
       this.isHidden = false;
       unlockHtml5Audio();
 
-      if (this.ctx && (this.ctx.state as string) === 'suspended') {
-        this.ctx.resume().catch(() => {});
+      const ctx = this.ensureAudioContextActive();
+
+      // Trigger 1-sample silent Web Audio buffer inside user gesture to physically unlock hardware routing
+      if (ctx && ctx.state === 'running') {
+        try {
+          const buf = ctx.createBuffer(1, 1, 22050);
+          const s = ctx.createBufferSource();
+          s.buffer = buf;
+          s.connect(ctx.destination);
+          s.start(0);
+        } catch {}
       }
 
       if (this.bgmEnabled && (!this.isBgmPlaying || (this.bgmAudio && this.bgmAudio.paused))) {
@@ -252,16 +342,7 @@ class SoundEngine {
     try {
       unlockHtml5Audio();
 
-      let ctx = this.ctx;
-      if (!ctx || ctx.state === 'closed') {
-        ctx = this.recreateContext();
-      }
-      if (ctx) {
-        const state = ctx.state as string;
-        if (state === 'suspended' || state === 'interrupted') {
-          await ctx.resume().catch(() => {});
-        }
-      }
+      const ctx = this.ensureAudioContextActive();
 
       if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.bgmAudio || this.bgmAudio.paused)) {
         this.startBgm();
@@ -307,21 +388,13 @@ class SoundEngine {
       this.wasBgmPlayingBeforeHidden = true;
     }
     this.pauseBgm();
-    if (this.ctx && this.ctx.state === 'running') {
-      try {
-        this.ctx.suspend().catch(() => {});
-      } catch {
-        // ignore
-      }
-    }
+    this.stopKeepAlive();
   }
 
   public async restoreFromExternalNavigation(): Promise<boolean> {
     this.isExternalNavActive = false;
     this.isHidden = false;
-    if (this.ctx && (this.ctx.state as string) === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
+    this.ensureAudioContextActive();
     if (this.bgmEnabled) {
       this.startBgm();
     }
@@ -333,18 +406,7 @@ class SoundEngine {
   }
 
   private initContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null;
-
-    if (!this.ctx || this.ctx.state === 'closed') {
-      return this.recreateContext();
-    }
-
-    const state = this.ctx.state as string;
-    if (state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
-
-    return this.ctx;
+    return this.ensureAudioContextActive();
   }
 
   private getNoiseBuffer(ctx: AudioContext): AudioBuffer {
@@ -364,6 +426,11 @@ class SoundEngine {
   public setSoundEnabled(enabled: boolean) {
     this.soundEnabled = enabled;
     localStorage.setItem('snake_pro_sound', String(enabled));
+    if (enabled) {
+      this.ensureAudioContextActive();
+    } else {
+      this.stopKeepAlive();
+    }
   }
 
   public getSoundEnabled(): boolean {
