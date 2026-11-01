@@ -36,10 +36,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state.
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("[AppDelegate] AVAudioSession resignActive error: \(error)")
+        }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources.
+        // Use this method to release shared resources and guarantee zero background audio.
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("[AppDelegate] AVAudioSession didEnterBackground error: \(error)")
+        }
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {

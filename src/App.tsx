@@ -2004,6 +2004,18 @@ export default function App() {
     const userLang = profile.language || 'zh-HK';
     const oldFid = getOrCreatePlayerId();
 
+    // 0. 立即停止任何進行中的遊戲，徹底重置對局數據並乾淨退回 HOME 主頁，杜絕停留於凍結的關卡畫布
+    stopGame();
+    isGameOverHandledRef.current = false;
+    setLastGameStats({ score: 0, coinsEarned: 0, applesEaten: 0, isNewHigh: false });
+    setSelectedMode('LEVELS');
+    setCurrentLevelId(1);
+    setClearedLevel(null);
+    setIsLevelClearOpen(false);
+    setAppView('HOME');
+    closeAllModals();
+    setIsSettingsOpen(false);
+
     // 1. 立即生成全新乾淨的 PlayerProfile，所有模式高分與場次徹底歸零，本機零延遲生效
     const resetProfile = createDefaultPlayerProfile(userLang);
     const freshProfile: PlayerProfile = {
@@ -2037,9 +2049,6 @@ export default function App() {
     };
 
     setProfile(freshProfile);
-    setCurrentLevelId(1);
-    setClearedLevel(null);
-    setIsLevelClearOpen(false);
     setAchievements(INITIAL_ACHIEVEMENTS);
 
     try {

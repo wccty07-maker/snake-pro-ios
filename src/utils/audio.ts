@@ -135,19 +135,6 @@ class SoundEngine {
             // ignore
           }
         });
-      } else if (state === 'interrupted') {
-        // iOS WebKit marks context interrupted when switching to Safari or external browser.
-        // It cannot be resumed via .resume(); it must be recreated upon return.
-        if (!this.isHidden) {
-          this.recreateContext();
-          if (this.bgmEnabled) {
-            this.startBgm();
-          }
-        }
-      } else if (state === 'suspended') {
-        if (!this.isHidden) {
-          ctx.resume().catch(() => {});
-        }
       }
     };
   }
@@ -185,13 +172,8 @@ class SoundEngine {
     } else {
       // Returning to foreground / app resumed:
       this.isExternalNavActive = false;
-      const ctxState = this.ctx ? (this.ctx.state as string) : null;
-      if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
-        this.recreateContext();
-      } else if (ctxState === 'suspended') {
-        this.ctx.resume().catch(() => {});
-      }
 
+      // 1. Unmute gain immediately
       if (this.bgmGainNode) {
         try {
           this.bgmGainNode.gain.cancelScheduledValues(0);
@@ -201,7 +183,15 @@ class SoundEngine {
         }
       }
 
-      // iOS WebKit silent buffer trigger to force CoreAudio output routing
+      // 2. Resume the existing unlocked AudioContext (do NOT destroy it, as destroying it revokes user gesture permissions)
+      const ctxState = this.ctx ? (this.ctx.state as string) : null;
+      if (!this.ctx || ctxState === 'closed') {
+        this.recreateContext();
+      } else if (ctxState === 'suspended' || ctxState === 'interrupted') {
+        this.ctx.resume().catch(() => {});
+      }
+
+      // 3. iOS WebKit silent buffer trigger to force CoreAudio output routing
       if (this.ctx) {
         try {
           const buf = this.ctx.createBuffer(1, 1, 22050);
@@ -245,10 +235,25 @@ class SoundEngine {
       unlockHtml5Audio();
 
       const ctxState = this.ctx ? (this.ctx.state as string) : null;
-      if (!this.ctx || ctxState === 'closed' || ctxState === 'interrupted') {
+      if (!this.ctx || ctxState === 'closed') {
         this.recreateContext();
-      } else if (ctxState === 'suspended') {
-        this.ctx.resume().catch(() => {});
+      } else if (ctxState === 'suspended' || ctxState === 'interrupted') {
+        this.ctx
+          .resume()
+          .then(() => {
+            if (this.bgmEnabled && (!this.isBgmPlaying || !this.bgmIntervalId)) {
+              this.pauseBgm();
+              this.startBgm();
+            }
+          })
+          .catch(() => {
+            // If resume failed on an unrecoverable interrupted context, recreate it in this user gesture
+            this.recreateContext();
+            if (this.bgmEnabled) {
+              this.pauseBgm();
+              this.startBgm();
+            }
+          });
       }
 
       if (this.bgmGainNode) {

@@ -559,7 +559,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           setResetSuccess(true);
                           setTimeout(() => {
                             setResetSuccess(false);
-                          }, 4500);
+                            onClose();
+                          }, 1600);
                         } catch (err) {
                           console.warn('重設進度提示:', err);
                           setIsConfirmingReset(false);
