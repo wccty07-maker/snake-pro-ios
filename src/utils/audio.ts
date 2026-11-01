@@ -16,8 +16,10 @@ class SoundEngine {
   private rawBgmArrayBuffer: ArrayBuffer | null = null;
   private bgmAudioBuffer: AudioBuffer | null = null;
   private bgmSource: AudioBufferSourceNode | null = null;
+  private activeBgmSources: Set<AudioBufferSourceNode> = new Set();
   private bgmGainNode: GainNode | null = null;
   private isLoadingBgm: boolean = false;
+  private isStartingBgm: boolean = false;
   private isBgmPlaying: boolean = false;
   private wasBgmPlayingBeforeHidden: boolean = false;
   private noiseBuffer: AudioBuffer | null = null;
@@ -246,8 +248,8 @@ class SoundEngine {
       this.startKeepAlive(ctx);
     }
 
-    // 4. Restart BGM if enabled
-    if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.isBgmPlaying)) {
+    // 4. Restart BGM only if enabled, not already playing, and not currently starting
+    if (this.bgmEnabled && !this.isBgmPlaying && !this.isStartingBgm && !this.bgmSource) {
       await this.startBgm();
     }
   }
@@ -405,7 +407,7 @@ class SoundEngine {
       this.startBgm();
     } else {
       this.wasBgmPlayingBeforeHidden = false;
-      this.stopBgm();
+      this.stopAllBgmSources();
     }
   }
 
@@ -423,6 +425,27 @@ class SoundEngine {
 
   public setHapticsEnabled(_enabled: boolean) {
     // Disabled
+  }
+
+  private stopAllBgmSources() {
+    this.activeBgmSources.forEach((src) => {
+      try {
+        src.onended = null;
+        src.stop();
+        src.disconnect();
+      } catch {}
+    });
+    this.activeBgmSources.clear();
+    this.bgmSource = null;
+    this.isBgmPlaying = false;
+    this.isStartingBgm = false;
+
+    if (this.bgmGainNode && this.ctx) {
+      try {
+        this.bgmGainNode.gain.cancelScheduledValues(0);
+        this.bgmGainNode.gain.setValueAtTime(0, this.ctx.currentTime);
+      } catch {}
+    }
   }
 
   private async loadBgmBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
@@ -460,78 +483,90 @@ class SoundEngine {
   }
 
   /**
-   * Pure Web Audio Game BGM (Zero Lock-Screen Media Widget)
-   * Plays the 96-step fantasy melody via AudioBufferSourceNode.
-   * Completely immune to iOS Now Playing / Lock Screen media controls!
+   * Pure Web Audio Game BGM (Strict Singleton, High-Fidelity & Zero Lock-Screen Media Widget)
+   * Guaranteed to NEVER duplicate, overlap, or phase-distort!
    */
   public async startBgm() {
-    if (!this.bgmEnabled || typeof window === 'undefined') return;
+    if (!this.bgmEnabled || typeof window === 'undefined') {
+      this.stopAllBgmSources();
+      return;
+    }
     if (this.isHidden || this.isExternalNavActive) {
       this.wasBgmPlayingBeforeHidden = true;
       return;
     }
 
-    const ctx = this.getOrCreateContext();
-    if (!ctx) return;
+    // Atomic Mutex: If already playing or currently starting, strictly reject duplicate requests
+    if (this.isBgmPlaying || this.isStartingBgm || this.bgmSource) {
+      return;
+    }
+    this.isStartingBgm = true;
 
-    this.isBgmPlaying = true;
-    this.wasBgmPlayingBeforeHidden = true;
+    try {
+      const ctx = this.getOrCreateContext();
+      if (!ctx) return;
 
-    if (this.bgmSource) {
       if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
         try {
           await ctx.resume();
         } catch {}
       }
-      return;
-    }
 
-    if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
-      try {
-        await ctx.resume();
-      } catch {}
-    }
+      let buffer = this.bgmAudioBuffer;
+      if (!buffer) {
+        buffer = await this.loadBgmBuffer(ctx);
+      }
 
-    let buffer = this.bgmAudioBuffer;
-    if (!buffer) {
-      buffer = await this.loadBgmBuffer(ctx);
-    }
-    if (!buffer || !this.isBgmPlaying || this.isHidden || !this.bgmEnabled) return;
+      // Re-verify conditions after asynchronous load (e.g. user might have toggled off BGM or backgrounded)
+      if (!buffer || !this.bgmEnabled || this.isHidden || this.isExternalNavActive) {
+        this.stopAllBgmSources();
+        return;
+      }
 
-    try {
+      // Stop and cleanly disconnect any previous source nodes to ensure 100% single audio stream
+      this.stopAllBgmSources();
+
       if (!this.bgmGainNode || this.bgmGainNode.context !== ctx) {
         this.bgmGainNode = ctx.createGain();
         this.bgmGainNode.connect(this.getDestination(ctx));
       }
       this.bgmGainNode.gain.cancelScheduledValues(0);
-      this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
+      this.bgmGainNode.gain.setValueAtTime(MASTER_BGM_VOLUME, ctx.currentTime);
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.loop = true;
       source.connect(this.bgmGainNode);
+
+      source.onended = () => {
+        this.activeBgmSources.delete(source);
+        if (this.bgmSource === source) {
+          this.bgmSource = null;
+          this.isBgmPlaying = false;
+        }
+      };
+
       source.start(0);
 
       this.bgmSource = source;
+      this.activeBgmSources.add(source);
+      this.isBgmPlaying = true;
+      this.wasBgmPlayingBeforeHidden = true;
     } catch (err) {
       console.warn('[SoundEngine] startBgm error:', err);
+      this.stopAllBgmSources();
+    } finally {
+      this.isStartingBgm = false;
     }
   }
 
   public pauseBgm() {
-    this.isBgmPlaying = false;
-    if (this.bgmSource) {
-      try {
-        this.bgmSource.stop();
-        this.bgmSource.disconnect();
-      } catch {}
-      this.bgmSource = null;
-    }
+    this.stopAllBgmSources();
   }
 
   public stopBgm() {
-    this.pauseBgm();
     this.wasBgmPlayingBeforeHidden = false;
+    this.stopAllBgmSources();
   }
 
   /**
