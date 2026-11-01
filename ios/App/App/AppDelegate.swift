@@ -8,9 +8,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Enable audio playback even when physical iPhone mute / silent switch is engaged
+        // Prevent white screen flash by setting native window background to space dark
+        self.window?.backgroundColor = UIColor(red: 6.0/255.0, green: 9.0/255.0, blue: 20.0/255.0, alpha: 1.0)
+
+        // Set audio session category to .ambient: official Apple standard for games.
+        // Guarantees ZERO lock screen media player / Now Playing cards!
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("[AppDelegate] AVAudioSession setup error: \(error)")
@@ -23,7 +27,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                   let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
             if type == .ended {
                 do {
-                    try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                    try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
                     try AVAudioSession.sharedInstance().setActive(true)
                 } catch {
                     print("[AppDelegate] AVAudioSession interruption resume error: \(error)")
@@ -36,8 +40,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state.
-        // Note: Do NOT call AVAudioSession.setActive(false) here, as cutting off active hardware audio buffers
-        // causes an audible DC-offset pop ("beep" / crackle) and corrupts WebKit's audio pipeline upon returning.
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
@@ -51,7 +53,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Reactivate audio session upon returning to app from background or external browser
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("[AppDelegate] AVAudioSession reactivate error: \(error)")

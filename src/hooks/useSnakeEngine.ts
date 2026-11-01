@@ -3269,8 +3269,41 @@ export function useSnakeEngine({
       }
     };
 
+    const restartLoop = () => {
+      if (animId) cancelAnimationFrame(animId);
+      lastTickTime = performance.now();
+      animId = requestAnimationFrame(loop);
+    };
+
     animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
+
+    const onResume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        restartLoop();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('pageshow', onResume);
+    window.addEventListener('focus', onResume);
+
+    const win = window as any;
+    if (win.Capacitor?.Plugins?.App) {
+      try {
+        win.Capacitor.Plugins.App.addListener('appStateChange', (state: { isActive: boolean }) => {
+          if (state.isActive) {
+            restartLoop();
+          }
+        });
+      } catch {}
+    }
+
+    return () => {
+      cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+      window.removeEventListener('focus', onResume);
+    };
   }, [isPlaying, isPaused, isGameOver]);
 
   // Countdown Timer (for TIME_ATTACK or timed LEVELS missions)

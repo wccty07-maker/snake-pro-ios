@@ -5,32 +5,14 @@
  */
 
 const MASTER_BGM_VOLUME = 0.35;
-const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-let isHtml5AudioUnlocked = false;
-
-const unlockHtml5Audio = () => {
-  if (isHtml5AudioUnlocked || typeof window === 'undefined') return;
-  try {
-    const audio = new Audio();
-    audio.src = SILENT_WAV;
-    audio.volume = 0.01;
-    const p = audio.play();
-    if (p !== undefined) {
-      p.then(() => {
-        isHtml5AudioUnlocked = true;
-        audio.pause();
-      }).catch(() => {});
-    }
-  } catch {
-    // ignore
-  }
-};
-
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private soundEnabled: boolean = true;
   private bgmEnabled: boolean = true;
-  private bgmAudio: HTMLAudioElement | null = null;
+  private bgmAudioBuffer: AudioBuffer | null = null;
+  private bgmSource: AudioBufferSourceNode | null = null;
+  private bgmGainNode: GainNode | null = null;
+  private isLoadingBgm: boolean = false;
   private isBgmPlaying: boolean = false;
   private wasBgmPlayingBeforeHidden: boolean = false;
   private noiseBuffer: AudioBuffer | null = null;
@@ -236,7 +218,7 @@ class SoundEngine {
       // Ensure AudioContext is recovered and DAC is warmed up
       this.ensureAudioContextActive();
 
-      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.bgmAudio || this.bgmAudio.paused)) {
+      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.isBgmPlaying)) {
         this.startBgm();
       }
     }
@@ -252,7 +234,6 @@ class SoundEngine {
       if (this.isExternalNavActive) return;
 
       this.isHidden = false;
-      unlockHtml5Audio();
 
       const ctx = this.ensureAudioContextActive();
 
@@ -267,7 +248,7 @@ class SoundEngine {
         } catch {}
       }
 
-      if (this.bgmEnabled && (!this.isBgmPlaying || (this.bgmAudio && this.bgmAudio.paused))) {
+      if (this.bgmEnabled && (!this.isBgmPlaying || !this.bgmSource)) {
         this.startBgm();
       }
     };
@@ -340,11 +321,9 @@ class SoundEngine {
     this.isResumingAudio = true;
 
     try {
-      unlockHtml5Audio();
-
       const ctx = this.ensureAudioContextActive();
 
-      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.bgmAudio || this.bgmAudio.paused)) {
+      if (this.bgmEnabled && (this.wasBgmPlayingBeforeHidden || !this.isBgmPlaying)) {
         this.startBgm();
       }
 
@@ -465,56 +444,67 @@ class SoundEngine {
     // Disabled
   }
 
-  private getBgmAudio(): HTMLAudioElement | null {
-    if (typeof window === 'undefined') return null;
-    if (!this.bgmAudio) {
-      try {
-        const bgmUrl = new URL('assets/bgm_fantasy.mp3', window.location.href).href;
-        this.bgmAudio = new Audio(bgmUrl);
-        this.bgmAudio.loop = true;
-        this.bgmAudio.volume = MASTER_BGM_VOLUME;
-        this.bgmAudio.preload = 'auto';
+  private async loadBgmBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
+    if (this.bgmAudioBuffer) return this.bgmAudioBuffer;
+    if (this.isLoadingBgm || typeof window === 'undefined') return null;
+    this.isLoadingBgm = true;
 
-        // iOS Safari safeguard: when audio reaches the end, loop back reliably
-        this.bgmAudio.addEventListener('ended', () => {
-          if (this.bgmAudio && this.bgmEnabled && !this.isHidden && !this.isExternalNavActive) {
-            this.bgmAudio.currentTime = 0;
-            this.bgmAudio.play().catch(() => {});
-          }
-        });
-      } catch (err) {
-        console.warn('[SoundEngine] Failed to initialize BGM audio element:', err);
-      }
+    try {
+      const bgmUrl = new URL('assets/bgm_fantasy.mp3', window.location.href).href;
+      const resp = await fetch(bgmUrl);
+      const arrayBuffer = await resp.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      this.bgmAudioBuffer = decoded;
+      return decoded;
+    } catch (err) {
+      console.warn('[SoundEngine] Failed to load/decode BGM audio buffer:', err);
+      return null;
+    } finally {
+      this.isLoadingBgm = false;
     }
-    return this.bgmAudio;
   }
 
   /**
-   * High-Fidelity Studio Fantasy Adventure BGM
-   * Native HTML5 Audio loop backed by iOS CoreMedia AVPlayer:
-   * 100% pop-free, zero DC offset beep on app suspend, and 100% reliable resume!
+   * Pure Web Audio Game BGM (Zero Lock-Screen Media Widget)
+   * Plays the 96-step fantasy melody via AudioBufferSourceNode.
+   * Completely immune to iOS Now Playing / Lock Screen media controls!
    */
-  public startBgm() {
+  public async startBgm() {
     if (!this.bgmEnabled || typeof window === 'undefined') return;
     if (this.isHidden || this.isExternalNavActive) {
       this.wasBgmPlayingBeforeHidden = true;
       return;
     }
 
-    const audio = this.getBgmAudio();
-    if (!audio) return;
+    const ctx = this.ensureAudioContextActive();
+    if (!ctx) return;
 
     this.isBgmPlaying = true;
     this.wasBgmPlayingBeforeHidden = true;
 
+    if (this.bgmSource) return;
+
+    let buffer = this.bgmAudioBuffer;
+    if (!buffer) {
+      buffer = await this.loadBgmBuffer(ctx);
+    }
+    if (!buffer || !this.isBgmPlaying || this.isHidden || !this.bgmEnabled) return;
+
     try {
-      audio.volume = MASTER_BGM_VOLUME;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Play was deferred until user gesture - will be triggered on next interaction
-        });
+      if (!this.bgmGainNode || this.bgmGainNode.context !== ctx) {
+        this.bgmGainNode = ctx.createGain();
+        this.bgmGainNode.connect(ctx.destination);
       }
+      this.bgmGainNode.gain.cancelScheduledValues(0);
+      this.bgmGainNode.gain.value = MASTER_BGM_VOLUME;
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(this.bgmGainNode);
+      source.start(0);
+
+      this.bgmSource = source;
     } catch {
       // ignore
     }
@@ -522,25 +512,18 @@ class SoundEngine {
 
   public pauseBgm() {
     this.isBgmPlaying = false;
-    if (this.bgmAudio) {
+    if (this.bgmSource) {
       try {
-        this.bgmAudio.pause();
-      } catch {
-        // ignore
-      }
+        this.bgmSource.stop();
+        this.bgmSource.disconnect();
+      } catch {}
+      this.bgmSource = null;
     }
   }
 
   public stopBgm() {
     this.pauseBgm();
     this.wasBgmPlayingBeforeHidden = false;
-    if (this.bgmAudio) {
-      try {
-        this.bgmAudio.currentTime = 0;
-      } catch {
-        // ignore
-      }
-    }
   }
 
   /**

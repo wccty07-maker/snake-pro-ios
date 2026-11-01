@@ -2678,8 +2678,43 @@ export const ModernGameCanvas: React.FC<ModernGameCanvasProps> = ({
       }
     };
 
+    const startOrRestartLoop = () => {
+      if (animId) cancelAnimationFrame(animId);
+      animId = requestAnimationFrame(update);
+      try {
+        renderRef.current();
+      } catch {}
+    };
+
     animId = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(animId);
+
+    const onResume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        startOrRestartLoop();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('pageshow', onResume);
+    window.addEventListener('focus', onResume);
+
+    const win = window as any;
+    if (win.Capacitor?.Plugins?.App) {
+      try {
+        win.Capacitor.Plugins.App.addListener('appStateChange', (state: { isActive: boolean }) => {
+          if (state.isActive) {
+            startOrRestartLoop();
+          }
+        });
+      } catch {}
+    }
+
+    return () => {
+      cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+      window.removeEventListener('focus', onResume);
+    };
   }, [isPaused, batterySaverEnabled, targetFps, fxRef]);
 
   // Resize canvas according to container
