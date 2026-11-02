@@ -12,6 +12,7 @@ import {
   deletePlayerScore,
   getInitialLeaderboardEntries,
   SEED_LEADERBOARDS,
+  formatLeaderboardDate,
 } from '../services/leaderboardService';
 import { soundEngine } from '../utils/audio';
 import { SupportedLanguage, getTranslation } from '../utils/i18n';
@@ -318,7 +319,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
           username: currentFid,
           score: effectiveBestScore,
           mode: activeMode,
-          formattedDate: '剛剛',
+          formattedDate: formatLeaderboardDate(new Date()),
           isCurrentPlayer: true,
         });
       }
@@ -766,9 +767,13 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                             {championBadgeLabel}
                           </span>
                         )}
-                        {entry.formattedDate && !entry.formattedDate.includes('雲端') && !entry.formattedDate.toLowerCase().includes('cloud') && (
-                          <span className="text-slate-500 text-[10px]">{entry.formattedDate}</span>
-                        )}
+                        {(() => {
+                          const dateText =
+                            entry.formattedDate && entry.formattedDate !== '剛剛' && !entry.formattedDate.includes('雲端') && !entry.formattedDate.toLowerCase().includes('cloud')
+                              ? entry.formattedDate
+                              : formatLeaderboardDate(entry.updatedAt);
+                          return dateText ? <span className="text-slate-500 text-[10px]">{dateText}</span> : null;
+                        })()}
                       </div>
                     </div>
                   </div>

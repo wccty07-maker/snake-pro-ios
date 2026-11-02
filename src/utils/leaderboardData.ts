@@ -113,6 +113,9 @@ export function getLeaderboardTop20(
 
   const playerName = profile.playerName?.trim() || '你 (You)';
 
+  const now = new Date();
+  const currentDateStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+
   const playerEntry: LeaderboardEntry = {
     rank: 0,
     id: 'current_player',
@@ -120,7 +123,7 @@ export function getLeaderboardTop20(
     avatar: '👑',
     score: playerScore,
     mode,
-    date: '剛剛',
+    date: currentDateStr,
     badge: '你的記錄',
     isCurrentPlayer: true,
   };

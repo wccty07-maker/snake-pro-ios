@@ -428,6 +428,39 @@ export async function deleteAllPlayerScoresFromLeaderboard(
  * @param onError 發生錯誤時的回調函數
  * @returns 取消訂閱函數 (Unsubscribe)
  */
+/**
+ * 格式化排行榜日期（統一使用 M/D/YYYY，就算剛剛創立也用日期標示，絕不顯示「剛剛」）
+ */
+export function formatLeaderboardDate(rawDate?: any): string {
+  try {
+    if (!rawDate) {
+      const now = new Date();
+      return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+    }
+    let d: Date | null = null;
+    if (rawDate instanceof Date) {
+      d = rawDate;
+    } else if (typeof rawDate?.toDate === 'function') {
+      d = rawDate.toDate();
+    } else if (typeof rawDate === 'string' || typeof rawDate === 'number') {
+      const parsed = new Date(rawDate);
+      if (!isNaN(parsed.getTime())) {
+        d = parsed;
+      }
+    } else if (typeof rawDate?.seconds === 'number') {
+      d = new Date(rawDate.seconds * 1000);
+    } else if (typeof rawDate?._seconds === 'number') {
+      d = new Date(rawDate._seconds * 1000);
+    }
+
+    if (d && !isNaN(d.getTime())) {
+      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+    }
+  } catch {}
+  const now = new Date();
+  return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+}
+
 export interface SeedEntry {
   userId: string;
   username: string;
@@ -517,7 +550,10 @@ export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): Fi
         if (Array.isArray(parsed) && parsed.length >= 20) {
           return parsed.map((p: any) => ({
             ...p,
-            formattedDate: p.formattedDate === '雲端記錄' ? '' : (p.formattedDate || ''),
+            formattedDate:
+              p.formattedDate === '剛剛' || p.formattedDate === '雲端記錄'
+                ? formatLeaderboardDate(p.updatedAt)
+                : (p.formattedDate || formatLeaderboardDate(p.updatedAt)),
           }));
         }
       }
@@ -578,12 +614,8 @@ export function subscribeToTop20Leaderboard(
         playerRank = rank;
       }
 
-      // 格式化時間
-      let formattedDate = '剛剛';
-      if (data.updatedAt instanceof Timestamp) {
-        const date = data.updatedAt.toDate();
-        formattedDate = date.toLocaleDateString();
-      }
+      // 格式化時間：以真實日期標示，就算是剛剛才創的記錄，也以日期標示
+      const formattedDate = formatLeaderboardDate(data.updatedAt);
 
       entries.push({
         id: docSnap.id || `entry_${entryUserId}`,
