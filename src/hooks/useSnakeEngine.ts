@@ -855,39 +855,102 @@ export function useSnakeEngine({
     fxRef.current.particles.push(...newParticles);
   }, [batterySaverEnabled]);
 
-  // Generate random empty position
+  // Generate random empty position guaranteed never to collide with player snake, roving snakes, obstacles, or other items
   const getRandomFreeTile = useCallback(
-    (occupied: Point[]): Point => {
-      let pt: Point;
-      let collision = true;
-      let attempts = 0;
+    (occupied: Point[], extraForbidden?: Point[]): Point => {
+      const occupiedSet = new Set<string>();
 
-      while (collision && attempts < 200) {
-        attempts++;
-        pt = {
-          x: Math.floor(Math.random() * GRID_COLS),
-          y: Math.floor(Math.random() * GRID_ROWS),
-        };
-        collision = occupied.some((p) => p.x === pt.x && p.y === pt.y);
-        if (!collision) return pt;
+      // 1. Explicitly provided occupied points
+      for (const p of occupied) {
+        if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+          occupiedSet.add(`${p.x},${p.y}`);
+        }
       }
-      return { x: 5, y: 5 };
+
+      // 2. Extra forbidden points (e.g. freshly eaten food location, head position)
+      if (extraForbidden) {
+        for (const p of extraForbidden) {
+          if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+            occupiedSet.add(`${p.x},${p.y}`);
+          }
+        }
+      }
+
+      // 3. Defense-in-depth: Current player snake body from ref
+      for (const p of snakeRef.current) {
+        if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+          occupiedSet.add(`${p.x},${p.y}`);
+        }
+      }
+
+      // 4. Defense-in-depth: Roving snakes body segments
+      for (const rs of rovingSnakesRef.current) {
+        if (rs && rs.body) {
+          for (const p of rs.body) {
+            if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+              occupiedSet.add(`${p.x},${p.y}`);
+            }
+          }
+        }
+      }
+
+      // 5. Defense-in-depth: Obstacles
+      for (const obs of obstaclesRef.current) {
+        if (obs && typeof obs.x === 'number' && typeof obs.y === 'number') {
+          occupiedSet.add(`${obs.x},${obs.y}`);
+        }
+      }
+
+      // 6. Fast random attempts (up to 300)
+      for (let attempts = 0; attempts < 300; attempts++) {
+        const x = Math.floor(Math.random() * GRID_COLS);
+        const y = Math.floor(Math.random() * GRID_ROWS);
+        const key = `${x},${y}`;
+        if (!occupiedSet.has(key)) {
+          return { x, y };
+        }
+      }
+
+      // 7. Deterministic full-board scan if 300 random attempts failed (e.g. dense board)
+      const freeTiles: Point[] = [];
+      for (let x = 0; x < GRID_COLS; x++) {
+        for (let y = 0; y < GRID_ROWS; y++) {
+          if (!occupiedSet.has(`${x},${y}`)) {
+            freeTiles.push({ x, y });
+          }
+        }
+      }
+
+      if (freeTiles.length > 0) {
+        return freeTiles[Math.floor(Math.random() * freeTiles.length)];
+      }
+
+      // 8. Board completely filled (no free tiles left on entire grid)
+      return { x: 0, y: 0 };
     },
     []
   );
 
   // Spawn regular or special apple
   const spawnFood = useCallback(
-    (currentSnake: Point[], currentObstacles: Point[], currentFoods: FoodItem[]) => {
+    (
+      currentSnake: Point[],
+      currentObstacles: Point[],
+      currentFoods: FoodItem[],
+      extraForbidden?: Point[]
+    ) => {
       const activeMission = modeRef.current === 'LEVELS' ? currentLevelRef.current : undefined;
       const occupied = [
         ...currentSnake,
+        ...snakeRef.current,
         ...currentObstacles,
+        ...obstaclesRef.current,
         ...(activeMission?.hasPortals && activeMission.portals ? activeMission.portals : []),
         ...rovingSnakesRef.current.flatMap((rs) => rs.body),
         ...currentFoods.map((f) => f.position),
+        ...(extraForbidden || []),
       ];
-      const pos = getRandomFreeTile(occupied);
+      const pos = getRandomFreeTile(occupied, extraForbidden);
 
       const activeMode = modeRef.current;
       const activeLevel = currentLevelRef.current;
@@ -1127,7 +1190,7 @@ export function useSnakeEngine({
         // Ensure at least 1 NORMAL apple exists unless mission targets only special foods
         const hasNormal = updated.some((f) => f.type === 'NORMAL');
         if (!hasNormal && type !== 'NORMAL') {
-          const normalPos = getRandomFreeTile([...occupied, pos]);
+          const normalPos = getRandomFreeTile([...occupied, pos, ...updated.map((u) => u.position)], extraForbidden);
           updated.push({
             id: Math.random().toString(),
             position: normalPos,
@@ -1138,7 +1201,7 @@ export function useSnakeEngine({
         }
         // In LEVELS mode or timed mode, maintain at least 3 apples on screen if targets demand multiple apples
         if (activeMode === 'LEVELS' && activeLevel && (activeLevel.targets.normal || 0) >= 8 && updated.length < 3) {
-          const extraPos = getRandomFreeTile([...occupied, ...updated.map((u) => u.position)]);
+          const extraPos = getRandomFreeTile([...occupied, pos, ...updated.map((u) => u.position)], extraForbidden);
           updated.push({
             id: Math.random().toString(),
             position: extraPos,
@@ -1271,7 +1334,13 @@ export function useSnakeEngine({
 
   // Unified food consumption handler (supporting both regular head bites and magnetic suction)
   const consumeFood = useCallback(
-    (eaten: FoodItem, fromMagnet: boolean = false, posOverride?: Point) => {
+    (
+      eaten: FoodItem,
+      fromMagnet: boolean = false,
+      posOverride?: Point,
+      currentSnakeOverride?: Point[]
+    ) => {
+      const effectiveSnake = currentSnakeOverride || snakeRef.current;
       const pos = posOverride || eaten.position;
       const currentCombo = comboRef.current;
       const isRainbow = isRainbowActiveRef.current;
@@ -1536,13 +1605,15 @@ export function useSnakeEngine({
 
         // 爆發 3 顆甜點雨彩蛋 (金果/金幣寶藏)
         const occupied = [
+          ...effectiveSnake,
           ...snakeRef.current,
           ...obstaclesRef.current,
           ...foodItemsRef.current.map((f) => f.position),
+          ...rovingSnakesRef.current.flatMap((rs) => rs.body),
         ];
         const bonusCandies: FoodItem[] = [];
         for (let i = 0; i < 3; i++) {
-          const bPos = getRandomFreeTile(occupied);
+          const bPos = getRandomFreeTile(occupied, [pos, ...effectiveSnake]);
           occupied.push(bPos);
           bonusCandies.push({
             id: Math.random().toString(),
@@ -1632,13 +1703,15 @@ export function useSnakeEngine({
 
         // 2. 秘庫珍寶噴發：從秘庫中震出稀有寶藏（高分金果、巨龍蛋或金幣袋）
         const occupiedTiles = [
+          ...effectiveSnake,
           ...snakeRef.current,
           ...obstaclesRef.current,
           ...foodItemsRef.current.map((f) => f.position),
+          ...rovingSnakesRef.current.flatMap((rs) => rs.body),
         ];
         const vaultRoll = Math.random();
         const treasureType: FoodType = vaultRoll < 0.45 ? 'GOLDEN' : vaultRoll < 0.75 ? 'DRAGON_EGG' : 'COIN';
-        const treasurePos = getRandomFreeTile(occupiedTiles);
+        const treasurePos = getRandomFreeTile(occupiedTiles, [pos, ...effectiveSnake]);
         const treasureDuration = treasureType === 'GOLDEN' ? 12 : treasureType === 'DRAGON_EGG' ? 16 : 14;
         const newTreasure: FoodItem = {
           id: Math.random().toString(),
@@ -1842,7 +1915,7 @@ export function useSnakeEngine({
       setFoodItems(remainingFoods);
 
       const currentObstacles = obstaclesRef.current;
-      spawnFood(snakeRef.current, currentObstacles, remainingFoods);
+      spawnFood(effectiveSnake, currentObstacles, remainingFoods, [pos, ...effectiveSnake]);
     },
     [checkLevelCompletion, spawnFood, spawnParticles, addFloatingText]
   );
@@ -2022,11 +2095,12 @@ export function useSnakeEngine({
     setRovingSnakes(roving);
     rovingSnakesRef.current = roving;
 
-    // Initial Foods (Guaranteed to never occupy portal positions)
+    // Initial Foods (Guaranteed to never occupy portal positions or roving snake bodies)
     const occupied = [
       ...initSnake,
       ...obs,
       ...(activeLevel?.hasPortals && activeLevel.portals ? activeLevel.portals : []),
+      ...roving.flatMap((rs) => rs.body),
     ];
     const initialFoods: FoodItem[] = [];
 
@@ -2920,10 +2994,9 @@ export function useSnakeEngine({
         isReverseEaten = true;
       }
       willGrow = true;
-      consumeFood(eaten, false, nextHead);
     }
 
-    // Move player snake body (update synchronously so roving snakes immediately see current player body)
+    // Move player snake body (update synchronously so roving snakes and food spawning immediately see current player body)
     const prevSnake = snakeRef.current;
     let newSnake = [nextHead, ...(willGrow ? prevSnake : prevSnake.slice(0, -1))];
 
@@ -2945,8 +3018,15 @@ export function useSnakeEngine({
       addFloatingText(tEngine('⏪ 尾變蛇頭!', '⏪ Reverse Head!', '⏪ 尾頭反転!'), newSnake[0].x, newSnake[0].y, '#818cf8');
     }
 
+    // CRITICAL: Synchronously update snake body state and ref BEFORE consuming food,
+    // so any food spawns triggered by consumeFood immediately know the exact updated position of the snake
     snakeRef.current = newSnake;
     setSnake(newSnake);
+
+    if (eatenIdx >= 0) {
+      const eaten = foods[eatenIdx];
+      consumeFood(eaten, false, nextHead, newSnake);
+    }
 
     // If magnet, golden key aura, or rainbow fever is active, also absorb any foods adjacent to nextHead or touching the new snake body
     if (isMagnetActiveRef.current || isKeyAuraActiveRef.current || isRainbowActiveRef.current) {
@@ -2956,7 +3036,7 @@ export function useSnakeEngine({
         const dist = Math.abs(currentHeadPos.x - f.position.x) + Math.abs(currentHeadPos.y - f.position.y);
         const touches = newSnake.some((s) => s.x === f.position.x && s.y === f.position.y);
         if (dist <= 1 || touches) {
-          consumeFood(f, true, f.position);
+          consumeFood(f, true, f.position, newSnake);
         }
       }
     }
@@ -3453,7 +3533,7 @@ export function useSnakeEngine({
 
         // Absorb all captured foods (updating score, snake length, and mission targets)
         for (const item of toAbsorb) {
-          consumeFood(item, true, item.position);
+          consumeFood(item, true, item.position, snakeRef.current);
         }
       }
 
