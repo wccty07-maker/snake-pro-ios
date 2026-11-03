@@ -47,7 +47,7 @@ workflows:
       - name: Install Fastlane & Tools
         script: |
           gem install fastlane --no-document
-          pip3 install pillow --quiet || true
+          node scripts/strip-icon-alpha.js || true
 
       - name: Patch Xcode Project Signing
         script: |

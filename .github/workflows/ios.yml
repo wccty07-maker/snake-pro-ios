@@ -114,56 +114,7 @@ jobs:
       - name: Strip Alpha Channel from App Store Icon
         run: |
           echo "=== Ensuring App Store Icon has no alpha channel (Required by App Store Connect) ==="
-          python3 -m pip install pillow --quiet || true
-          mkdir -p scripts
-          cat << 'EOF' > scripts/strip-icon-alpha.py
-          import os, sys, subprocess
-          try:
-              from PIL import Image
-          except ImportError:
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "--quiet"])
-              from PIL import Image
-
-          target_dirs = [
-              "ios/App/App/Assets.xcassets",
-              "ios/App/App/Assets.xcassets/AppIcon.appiconset"
-          ]
-          count = 0
-          for target_dir in target_dirs:
-              if not os.path.exists(target_dir):
-                  continue
-              for root, _, files in os.walk(target_dir):
-                  for f in files:
-                      if f.lower().endswith(".png"):
-                          p = os.path.join(root, f)
-                          try:
-                              with Image.open(p) as img:
-                                  bg = Image.new("RGB", img.size, (15, 23, 42))
-                                  if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
-                                      rgba = img.convert("RGBA")
-                                      bg.paste(rgba, (0, 0), rgba)
-                                  else:
-                                      bg.paste(img.convert("RGB"), (0, 0))
-                                  bg.save(p, "PNG", optimize=True)
-                                  count += 1
-                                  print(f"[Icon-Fix] Stripped alpha via Pillow: {p} ({img.size})")
-                          except Exception as e:
-                              print(f"[Icon-Fix] Error processing {p}: {e}")
-          print(f"[Icon-Fix] Total processed by Pillow: {count}")
-          EOF
-          python3 scripts/strip-icon-alpha.py || true
-
-          # Secondary macOS native sips JPEG roundtrip guarantee (JPEG strips all alpha channels)
-          if command -v sips >/dev/null 2>&1; then
-            find ios/App/App -name "*icon*.png" -o -name "*Icon*.png" | while read -r img; do
-              sips -s format jpeg "$img" --out "${img}.jpg" >/dev/null 2>&1 || true
-              if [ -f "${img}.jpg" ]; then
-                sips -s format png "${img}.jpg" --out "$img" >/dev/null 2>&1 || true
-                rm -f "${img}.jpg"
-              fi
-              echo "sips check: $img -> $(sips -g hasAlpha "$img" 2>/dev/null | tr -d '\n')"
-            done
-          fi
+          node scripts/strip-icon-alpha.js || true
 
       - name: Patch Xcode Project Signing & Development Team
         run: |
