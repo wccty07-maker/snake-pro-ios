@@ -16,6 +16,9 @@ exclude_prefixes = (
     os.path.join('public', 'assets', 'aistudio'),
     os.path.join('public', 'screenshots'),
     'build',
+    os.path.join('android', 'build'),
+    os.path.join('android', 'app', 'build'),
+    os.path.join('android', '.gradle'),
 )
 
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:

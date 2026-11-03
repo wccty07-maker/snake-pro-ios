@@ -58,26 +58,22 @@ def patch_ipa(ipa_path, keychain_path=None, build_override=None):
 
     print(f"[IPA-Patch] Original DTSDKName: {plist_data.get('DTSDKName')}, DTXcode: {plist_data.get('DTXcode')}, DTPlatformVersion: {plist_data.get('DTPlatformVersion')}")
 
-    # Patch Info.plist to meet Apple App Store Connect requirements (iOS 26+ SDK & Xcode 26+)
-    plist_data["DTSDKName"] = "iphoneos26.0"
-    plist_data["DTPlatformVersion"] = "26.0"
-    plist_data["DTXcode"] = "2600"
-    plist_data["DTXcodeBuild"] = "26A100"
-    plist_data["DTSDKBuild"] = "26A100"
-    if "BuildMachineOSBuild" in plist_data:
-        plist_data["BuildMachineOSBuild"] = "26A100"
+    # Enforce iPhone only (UIDeviceFamily = [1]) and remove iPad orientation keys
+    plist_data["UIDeviceFamily"] = [1]
+    if "UISupportedInterfaceOrientations~ipad" in plist_data:
+        del plist_data["UISupportedInterfaceOrientations~ipad"]
 
-    # Apple requires CFBundleVersion to be strictly higher than previously uploaded (App Store Connect latest was 126)
+    # Apple requires CFBundleVersion to be strictly higher than previously uploaded (App Store Connect latest is 173)
     raw_build = build_override or os.environ.get("BUILD_NUMBER")
     try:
-        b_val = int(raw_build) if raw_build else 150
-        if b_val <= 141:
-            b_val += 150
+        b_val = int(raw_build) if raw_build else 175
+        if b_val <= 173:
+            b_val += 175
         plist_data["CFBundleVersion"] = str(b_val)
     except Exception:
-        plist_data["CFBundleVersion"] = "150"
+        plist_data["CFBundleVersion"] = "175"
 
-    print(f"[IPA-Patch] Patched values -> DTSDKName: {plist_data['DTSDKName']}, DTXcode: {plist_data['DTXcode']}, CFBundleVersion: {plist_data.get('CFBundleVersion')}")
+    print(f"[IPA-Patch] Verified -> DTSDKName: {plist_data.get('DTSDKName')}, DTXcode: {plist_data.get('DTXcode')}, CFBundleVersion: {plist_data.get('CFBundleVersion')}, UIDeviceFamily: {plist_data.get('UIDeviceFamily')}")
 
     with open(plist_path, "wb") as fp:
         plistlib.dump(plist_data, fp)

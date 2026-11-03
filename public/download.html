@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>下載 Android 專案包 - Snake Pro</title>
+  <style>
+    body {
+      background-color: #060914;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      color: #38bdf8;
+    }
+    p {
+      color: #9ca3af;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      transition: all 0.2s;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+    }
+    .btn:hover {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      transform: translateY(-1px);
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>📦 Snake Pro - 完整最新專案原始碼</h1>
+    <p>包含已更新好的 iOS 專案配置（iPhone-Only、最新 GM 版 Xcode 構建設定、GitHub Actions CI/CD 工作流及所有原始碼）。</p>
+    <a href="/snake_project.zip" class="btn" id="dlBtn" download="snake_project.zip">
+      ⬇️ 立即下載 snake_project.zip
+    </a>
+    <div class="info">
+      點擊上方按鈕即可直接下載。解壓後包含完整的 iOS、Android、React 原始碼與最新工作流配置。
+    </div>
+  </div>
+  <script>
+    // 自動嘗試觸發下載
+    setTimeout(function() {
+      var link = document.getElementById('dlBtn');
+      if (link) {
+        link.click();
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

@@ -8,8 +8,8 @@ team_id = sys.argv[2] if len(sys.argv) > 2 else os.environ.get('APPLE_TEAM_ID', 
 profile_name = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('PROVISIONING_PROFILE_NAME', '')
 build_number = sys.argv[4] if len(sys.argv) > 4 else os.environ.get('BUILD_NUMBER', '')
 try:
-    if build_number and int(build_number) <= 141:
-        build_number = str(int(build_number) + 150)
+    if build_number and int(build_number) <= 173:
+        build_number = str(int(build_number) + 175)
 except Exception:
     pass
 
@@ -77,6 +77,12 @@ def patch_build_settings(match):
             settings = re.sub(r'CURRENT_PROJECT_VERSION\s*=\s*[^;]+;', f'CURRENT_PROJECT_VERSION = {build_number};', settings)
         else:
             settings = settings.rstrip() + f'\n\t\t\t\tCURRENT_PROJECT_VERSION = {build_number};\n\t\t\t'
+
+    # Force iPhone-only (TARGETED_DEVICE_FAMILY = 1)
+    if 'TARGETED_DEVICE_FAMILY' in settings:
+        settings = re.sub(r'TARGETED_DEVICE_FAMILY\s*=\s*[^;]+;', 'TARGETED_DEVICE_FAMILY = 1;', settings)
+    else:
+        settings = settings.rstrip() + '\n\t\t\t\tTARGETED_DEVICE_FAMILY = 1;\n\t\t\t'
 
     return f'buildSettings = {{{settings}}};'
 

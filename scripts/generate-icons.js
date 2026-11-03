@@ -37,7 +37,29 @@ if (fs.existsSync(iosIconDir)) {
   });
   const png1024 = resvg1024.render().asPng();
   fs.writeFileSync(path.join(iosIconDir, 'AppIcon-512@2x.png'), png1024);
-  console.log(`Generated iOS AppIcon-512@2x.png (1024x1024) - ${png1024.length} bytes`);
+}
+
+// Generate Android Launcher Icons if android exists
+const androidResDir = path.resolve('android/app/src/main/res');
+if (fs.existsSync(androidResDir)) {
+  const androidSizes = [
+    { dir: 'mipmap-mdpi', size: 48 },
+    { dir: 'mipmap-hdpi', size: 72 },
+    { dir: 'mipmap-xhdpi', size: 96 },
+    { dir: 'mipmap-xxhdpi', size: 144 },
+    { dir: 'mipmap-xxxhdpi', size: 192 }
+  ];
+  for (const item of androidSizes) {
+    const targetFolder = path.join(androidResDir, item.dir);
+    if (fs.existsSync(targetFolder)) {
+      const r = new Resvg(svg, { fitTo: { mode: 'width', value: item.size } });
+      const buf = r.render().asPng();
+      fs.writeFileSync(path.join(targetFolder, 'ic_launcher.png'), buf);
+      fs.writeFileSync(path.join(targetFolder, 'ic_launcher_round.png'), buf);
+      fs.writeFileSync(path.join(targetFolder, 'ic_launcher_foreground.png'), buf);
+      console.log(`Generated Android ${item.dir} (${item.size}x${item.size})`);
+    }
+  }
 }
 
 console.log('All icons generated successfully!');

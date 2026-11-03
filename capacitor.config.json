@@ -1,5 +1,5 @@
 {
-  "appId": "elemall.snakegame.1",
+  "appId": "com.elemall.snakegame",
   "appName": "Snake Pro",
   "webDir": "dist",
   "server": {

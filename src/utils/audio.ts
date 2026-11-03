@@ -4,7 +4,6 @@
  * with multi-part melodies and layered instrumentation without external audio files.
  */
 
-import { App } from '@capacitor/app';
 
 const MASTER_BGM_VOLUME = 0.35;
 
@@ -286,9 +285,12 @@ class SoundEngine {
 
     // Native Capacitor App lifecycle events
     try {
-      App.addListener('appStateChange', (state) => {
-        this.handleVisibilityOrFocusChange(state.isActive);
-      });
+      const capApp = (window as any)?.Capacitor?.Plugins?.App;
+      if (capApp && typeof capApp.addListener === 'function') {
+        capApp.addListener('appStateChange', (state: { isActive: boolean }) => {
+          this.handleVisibilityOrFocusChange(state.isActive);
+        });
+      }
     } catch {
       // ignore
     }
