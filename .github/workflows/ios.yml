@@ -118,12 +118,12 @@ jobs:
 
       - name: Patch Xcode Project Signing & Development Team
         run: |
-          # Calculate incrementing build number: previous TestFlight upload was 173. Apple requires CFBundleVersion > 173.
+          # Calculate incrementing build number: previous TestFlight upload was 200. Apple requires CFBundleVersion > 200.
           RUN_NUM="${{ github.run_number }}"
-          OFFSET=175
+          OFFSET=205
           CALCULATED_BUILD=$(( RUN_NUM + OFFSET ))
-          if [ "$CALCULATED_BUILD" -lt 175 ]; then
-            CALCULATED_BUILD=175
+          if [ "$CALCULATED_BUILD" -lt 205 ]; then
+            CALCULATED_BUILD=205
           fi
           echo "Calculated Build Number: $CALCULATED_BUILD"
           echo "BUILD_NUMBER=$CALCULATED_BUILD" >> $GITHUB_ENV
@@ -213,30 +213,14 @@ jobs:
                               if build_num:
                                   pd["CFBundleVersion"] = str(build_num)
                               else:
-                                  curr_b = str(pd.get("CFBundleVersion", "175"))
-                                  if curr_b.isdigit() and int(curr_b) <= 173:
-                                      pd["CFBundleVersion"] = "175"
+                                  curr_b = str(pd.get("CFBundleVersion", "205"))
+                                  if curr_b.isdigit() and int(curr_b) <= 200:
+                                      pd["CFBundleVersion"] = "205"
                               with open(p_path, "wb") as fp:
                                   plistlib.dump(pd, fp)
                               print(f"[IPA-Patch] Updated {p_path} for iPhone Only (CFBundleVersion: {pd.get('CFBundleVersion')})")
                           except Exception as e:
                               print(f"[IPA-Patch] Plist update note on {p_path}: {e}")
-
-              # 2. Strip alpha from all PNGs in Payload/App.app
-              if sys.platform == "darwin":
-                  print("[IPA-Patch] Stripping alpha channel from all PNG assets in .app bundle...")
-                  alpha_count = 0
-                  for root, _, files in os.walk(app_bundle):
-                      for f in files:
-                          if f.lower().endswith(".png"):
-                              img_path = os.path.join(root, f)
-                              jpg_path = img_path + ".jpg"
-                              subprocess.call(["sips", "-s", "format", "jpeg", img_path, "--out", jpg_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                              if os.path.exists(jpg_path):
-                                  subprocess.call(["sips", "-s", "format", "png", jpg_path, "--out", img_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                  os.remove(jpg_path)
-                                  alpha_count += 1
-                  print(f"[IPA-Patch] Cleaned {alpha_count} PNGs in app bundle.")
 
               # 3. Re-sign nested frameworks first, then main app bundle
               if sys.platform == "darwin":
