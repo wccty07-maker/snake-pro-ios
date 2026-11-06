@@ -275,6 +275,12 @@ export interface PlayerProfile {
     TIME_ATTACK: number;
     SURVIVAL: number;
   };
+  highScoreDates?: {
+    LEVELS?: string;
+    CLASSIC?: string;
+    TIME_ATTACK?: string;
+    SURVIVAL?: string;
+  };
   levelHighScores?: Record<number, number>;
   selectedSkin: string;
   selectedArena: string;

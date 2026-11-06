@@ -124,27 +124,12 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
 
   const currentModeScore = isCurrentModeUnplayed ? 0 : getPlayerScoreForMode(activeMode);
 
-  // 當開啟排行榜或切換模式時，自動將本地已有的個人最高分同步至 Firestore
-  // 解決玩家在通關或刷新本地紀錄時（如 985 分）尚未成功提交至雲端的問題
+  // 當開啟排行榜或切換模式時，若本地有高分且尚未同步，在背景安全同步（絕不覆蓋已有的創紀錄日期）
   useEffect(() => {
     if (!isOpen) return;
     if (isCurrentModeUnplayed) return;
 
-    const currentScore = getPlayerScoreForMode(activeMode);
-    if (currentScore > 0) {
-      const userId = getOrCreatePlayerId();
-      submitScore(userId, userId, currentScore, activeMode, undefined, true)
-        .then((res) => {
-          if (res.updated) {
-            console.log(`[Leaderboard] 自動同步 ${activeMode} 高分 (${res.score}) 至排行榜成功！`);
-          }
-        })
-        .catch((err) => {
-          console.warn(`[Leaderboard] 自動同步 ${activeMode} 高分失敗:`, err);
-        });
-    }
-
-    // 同時在背景靜態補交所有模式最高分
+    // 同步本地高分（若雲端已有紀錄，保留雲端真實創紀錄日期）
     syncAllLocalHighScores(profile).catch(() => {});
   }, [isOpen, activeMode, isCurrentModeUnplayed]);
 
@@ -313,13 +298,15 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     if (!hasMe && effectiveBestScore > 0) {
       const lowestScore = list.length >= 20 ? list[list.length - 1].score : 0;
       if (list.length < 20 || effectiveBestScore >= lowestScore) {
+        const profileModeKey = activeMode === 'Classic' ? 'CLASSIC' : activeMode === 'Time' ? 'TIME_ATTACK' : 'LEVELS';
+        const localDate = profile.highScoreDates?.[profileModeKey];
         list.push({
           id: `${currentFid}_${activeMode}`,
           userId: currentFid,
           username: currentFid,
           score: effectiveBestScore,
           mode: activeMode,
-          formattedDate: formatLeaderboardDate(new Date()),
+          formattedDate: localDate ? formatLeaderboardDate(localDate) : '',
           isCurrentPlayer: true,
         });
       }
@@ -771,7 +758,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                           const dateText =
                             entry.formattedDate && entry.formattedDate !== '剛剛' && !entry.formattedDate.includes('雲端') && !entry.formattedDate.toLowerCase().includes('cloud')
                               ? entry.formattedDate
-                              : formatLeaderboardDate(entry.updatedAt);
+                              : formatLeaderboardDate(entry.achievedAt || entry.updatedAt);
                           return dateText ? <span className="text-slate-500 text-[10px]">{dateText}</span> : null;
                         })()}
                       </div>

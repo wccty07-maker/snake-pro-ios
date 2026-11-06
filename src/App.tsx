@@ -300,6 +300,7 @@ export default function App() {
               SURVIVAL: parsed.highScores?.SURVIVAL || 0,
             };
           })(),
+          highScoreDates: parsed.highScoreDates || {},
           levelHighScores: parsed.levelHighScores || {},
           seenItems: Array.isArray(parsed.seenItems) ? parsed.seenItems : [],
         };
@@ -1001,6 +1002,7 @@ export default function App() {
           (maxRecordedLevel > 0 && prevMissionsScore > maxRecordedLevel);
 
         const safeBaseLevelHigh = isPriorLeaked ? maxRecordedLevel : prevMissionsScore;
+        const isNewMissionHigh = clearedScore > safeBaseLevelHigh;
         const nextHigh = Math.max(safeBaseLevelHigh, clearedScore);
 
         return {
@@ -1015,6 +1017,9 @@ export default function App() {
             ...prev.highScores,
             LEVELS: nextHigh,
           },
+          highScoreDates: isNewMissionHigh
+            ? { ...(prev.highScoreDates || {}), LEVELS: new Date().toISOString() }
+            : prev.highScoreDates,
           levelHighScores: {
             ...(prev.levelHighScores || {}),
             [levelId]: updatedLevelBest,
@@ -1038,16 +1043,17 @@ export default function App() {
       if (levelId >= 350) handleAchievementProgress('t4_stage_350', levelId);
       if (levelId >= 400) handleAchievementProgress('t4_stage_400', levelId);
 
-      // 闖關成功時，若得分大於 0，立即將真實關卡最高分提交至 Firebase 闖關排行榜
+      // 闖關成功時，若得分大於 0 且真正突破最高紀錄，提交至 Firebase 闖關排行榜
       const validLevelScores = Object.values(profile.levelHighScores || {}).filter(
         (s): s is number => typeof s === 'number' && s > 0
       );
       const maxRecorded = validLevelScores.length > 0 ? Math.max(...validLevelScores, clearedScore) : clearedScore;
       const bestMissionsScore = maxRecorded;
-      if (bestMissionsScore > 0) {
+      const isNewMissionsHigh = bestMissionsScore > (profile.highScores?.LEVELS || 0);
+      if (bestMissionsScore > 0 && isNewMissionsHigh) {
         const userId = getOrCreatePlayerId();
         const currentName = profile.playerName || generateUniquePlayerName(profile.language);
-        submitScore(userId, currentName, bestMissionsScore, 'Missions', undefined, true)
+        submitScore(userId, currentName, bestMissionsScore, 'Missions', undefined, false, new Date().toISOString())
           .then((result) => {
             if (result.updated) {
               console.log('[Firebase] 闖關模式通關已提交最高分至排行榜:', result.score);
@@ -1057,7 +1063,7 @@ export default function App() {
             console.warn('提交闖關最高分至 Firebase 異常:', err);
           });
       }
-      // 即時同步本地高分至雲端
+      // 安全同步本地歷史高分至雲端（保留各模式原始創紀錄時間）
       syncAllLocalHighScores(profileRef.current).catch(() => {});
       setIsLevelClearOpen(true);
     },
@@ -1165,6 +1171,9 @@ export default function App() {
             ...prev.highScores,
             [playedMode]: nextHigh,
           },
+          highScoreDates: (!isMissionMode && isNewHigh)
+            ? { ...(prev.highScoreDates || {}), [playedMode]: new Date().toISOString() }
+            : prev.highScoreDates,
         };
       });
 
@@ -1193,11 +1202,11 @@ export default function App() {
       if (nextTotalCoins >= 10000) handleAchievementProgress('t4_coins_10000', nextTotalCoins);
 
       // 當遊戲結束時提交分數至 Firebase Firestore 排行榜 (僅限經典 CLASSIC、計時 TIME_ATTACK 等無盡模式破紀錄時提交；絕不以低分覆蓋既有高分)
-      if (!isMissionMode && newBestScore > 0) {
+      if (!isMissionMode && newBestScore > 0 && isNewHigh) {
         const firestoreMode = normalizeMode(playedMode);
         const userId = getOrCreatePlayerId();
         const currentName = currentProfile.playerName || generateUniquePlayerName(currentProfile.language);
-        submitScore(userId, currentName, newBestScore, firestoreMode, undefined, isNewHigh)
+        submitScore(userId, currentName, newBestScore, firestoreMode, undefined, false, new Date().toISOString())
           .then((result) => {
             if (result.updated) {
               console.log(`[Firebase] ${result.mode} 模式排行榜已更新最高分:`, result.score);

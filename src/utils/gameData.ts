@@ -1028,6 +1028,7 @@ export const createDefaultPlayerProfile = (lang?: SupportedLanguage): PlayerProf
       TIME_ATTACK: 0,
       SURVIVAL: 0,
     },
+    highScoreDates: {},
     levelHighScores: {},
     selectedSkin: 'neon_viper',
     selectedArena: 'neon_grid',

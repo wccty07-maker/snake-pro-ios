@@ -30,6 +30,7 @@ export interface FirestoreLeaderboardEntry {
   mode: LeaderboardMode;
   rank?: number;
   updatedAt?: Timestamp | null;
+  achievedAt?: Timestamp | null;
   formattedDate?: string;
   isCurrentPlayer?: boolean;
 }
@@ -65,23 +66,32 @@ export async function submitScoreViaRest(
   userId: string,
   username: string,
   score: number,
-  mode: LeaderboardMode
+  mode: LeaderboardMode,
+  achievedAtIso?: string,
+  shouldUpdateDate: boolean = false
 ): Promise<boolean> {
   const docId = `${userId}_${mode}`;
-  const url = `${FIRESTORE_REST_BASE}/leaderboard/${encodeURIComponent(docId)}?updateMask.fieldPaths=score&updateMask.fieldPaths=mode&updateMask.fieldPaths=username&updateMask.fieldPaths=userId&updateMask.fieldPaths=updatedAt`;
+  const fields = ['score', 'mode', 'username', 'userId'];
+  if (shouldUpdateDate && achievedAtIso) {
+    fields.push('updatedAt', 'achievedAt');
+  }
+  const updateMask = fields.map((f) => `updateMask.fieldPaths=${f}`).join('&');
+  const url = `${FIRESTORE_REST_BASE}/leaderboard/${encodeURIComponent(docId)}?${updateMask}`;
   try {
+    const payloadFields: any = {
+      userId: { stringValue: userId },
+      username: { stringValue: username },
+      score: { integerValue: String(score) },
+      mode: { stringValue: mode },
+    };
+    if (shouldUpdateDate && achievedAtIso) {
+      payloadFields.updatedAt = { timestampValue: achievedAtIso };
+      payloadFields.achievedAt = { timestampValue: achievedAtIso };
+    }
     const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fields: {
-          userId: { stringValue: userId },
-          username: { stringValue: username },
-          score: { integerValue: String(score) },
-          mode: { stringValue: mode },
-          updatedAt: { timestampValue: new Date().toISOString() },
-        },
-      }),
+      body: JSON.stringify({ fields: payloadFields }),
     });
     return res.ok;
   } catch {
@@ -126,7 +136,9 @@ export async function fetchTopScoresViaRest(targetMode: LeaderboardMode): Promis
       const username = f.username?.stringValue || userId || 'Player';
       const mode = (f.mode?.stringValue || targetMode) as LeaderboardMode;
       const id = docItem.name ? docItem.name.split('/').pop() : `${userId}_${mode}`;
-      const updatedAtStr = f.updatedAt?.timestampValue || docItem.updateTime;
+      const achievedAtStr = f.achievedAt?.timestampValue;
+      const updatedAtStr = f.updatedAt?.timestampValue || docItem.createTime || docItem.updateTime;
+      const finalDateStr = achievedAtStr || updatedAtStr;
 
       docs.push({
         id,
@@ -135,7 +147,8 @@ export async function fetchTopScoresViaRest(targetMode: LeaderboardMode): Promis
           username,
           score,
           mode,
-          updatedAt: updatedAtStr ? { toDate: () => new Date(updatedAtStr) } : null,
+          achievedAt: achievedAtStr ? { toDate: () => new Date(achievedAtStr) } : null,
+          updatedAt: finalDateStr ? { toDate: () => new Date(finalDateStr) } : null,
         }),
       });
     });
@@ -178,7 +191,8 @@ export async function submitScore(
   score: number,
   mode: LeaderboardMode | GameMode | string,
   localHighScore?: number,
-  forceUpdate?: boolean
+  forceUpdate?: boolean,
+  achievedAt?: string | Date
 ): Promise<SubmitScoreResult> {
   const currentUserId = (userId?.trim() || getOrCreatePlayerId() || 'player').trim();
   const targetMode = normalizeMode(mode);
@@ -214,6 +228,7 @@ export async function submitScore(
   try {
     // 檢查現有雲端分數，設置 1200ms 快速超時防止網絡阻塞導致寫入被略過
     let existingScore = 0;
+    let existingDate: any = null;
     try {
       const getDocPromise = getDoc(playerDocRef);
       const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200));
@@ -221,15 +236,25 @@ export async function submitScore(
       if (docSnap && docSnap.exists()) {
         const data = docSnap.data();
         existingScore = typeof data.score === 'number' ? data.score : 0;
+        existingDate = data.achievedAt || data.updatedAt || data.createdAt;
       }
     } catch {
       // 網絡或離線備援，直接繼續執行寫入
     }
 
-    // 3. 判斷：若大於玩家雲端紀錄、或 forceUpdate 強制校正、或首次上傳，一律寫入
-    if (safeScore > existingScore || forceUpdate || existingScore === 0) {
-      // 雙通道寫入：先以原生 HTTPS REST PATCH 確保即使 iOS WKWebView 長輪詢或 WebSocket 受阻，也能直達 Google Firestore 伺服器
-      submitScoreViaRest(currentUserId, safeUsername, safeScore, targetMode).catch(() => {});
+    const isNewRecord = safeScore > existingScore;
+    const isFirstEntry = existingScore === 0;
+
+    // 3. 關鍵邏輯：只有在真正突破個人最高分 (safeScore > existingScore) 或首次上傳時，才更新創紀錄時間！
+    // 若分數未突破 (safeScore <= existingScore)，即便是背景同步、開榜刷新或暱稱更動，也絕對不可將創紀錄日期改成今天！
+    if (isNewRecord || isFirstEntry) {
+      const timestampToUse = achievedAt
+        ? (achievedAt instanceof Date ? achievedAt : new Date(achievedAt))
+        : new Date();
+      const isoDate = !isNaN(timestampToUse.getTime()) ? timestampToUse.toISOString() : new Date().toISOString();
+
+      // 雙通道寫入：原生 HTTPS REST PATCH 直連 Google Firestore 伺服器
+      submitScoreViaRest(currentUserId, safeUsername, safeScore, targetMode, isoDate, true).catch(() => {});
 
       await setDoc(
         playerDocRef,
@@ -238,7 +263,8 @@ export async function submitScore(
           username: safeUsername,
           score: safeScore,
           mode: targetMode,
-          updatedAt: serverTimestamp(),
+          achievedAt: Timestamp.fromDate(timestampToUse),
+          updatedAt: Timestamp.fromDate(timestampToUse),
         },
         { merge: true }
       );
@@ -248,11 +274,38 @@ export async function submitScore(
         score: safeScore,
         previousScore: existingScore,
         mode: targetMode,
-        reason: existingScore === 0 ? 'FIRST_ENTRY' : 'NEW_RECORD',
+        reason: isFirstEntry ? 'FIRST_ENTRY' : 'NEW_RECORD',
+      };
+    } else if (forceUpdate && safeScore !== existingScore) {
+      // 特殊校正：強制覆蓋被污染的數值，但保留原有的創紀錄時間
+      const keepDate = existingDate
+        ? existingDate
+        : (achievedAt ? (achievedAt instanceof Date ? achievedAt : new Date(achievedAt)) : null);
+
+      const payload: any = {
+        userId: currentUserId,
+        username: safeUsername,
+        score: safeScore,
+        mode: targetMode,
+      };
+      if (keepDate) {
+        payload.updatedAt = keepDate;
+        payload.achievedAt = keepDate;
+      }
+
+      await setDoc(playerDocRef, payload, { merge: true }).catch(() => {});
+      return {
+        updated: true,
+        score: safeScore,
+        previousScore: existingScore,
+        mode: targetMode,
+        reason: 'NEW_RECORD',
       };
     } else {
-      // 如果分數未突破，但暱稱有變動，順便更新暱稱
+      // 分數相同或未超越：若暱稱有變動，只更新暱稱，絕不改動已有的創紀錄時間 (updatedAt / achievedAt)
       if (safeUsername) {
+        submitScoreViaRest(currentUserId, safeUsername, existingScore, targetMode, undefined, false).catch(() => {});
+
         await setDoc(
           playerDocRef,
           {
@@ -260,7 +313,6 @@ export async function submitScore(
             username: safeUsername,
             score: existingScore,
             mode: targetMode,
-            updatedAt: serverTimestamp(),
           },
           { merge: true }
         ).catch(() => {});
@@ -304,17 +356,18 @@ export async function submitScore(
 }
 
 /**
- * 相容舊版函數簽名，支援帶入模式
+ * 相容舊版函數簽名，支援帶入模式與創紀錄日期
  */
 export async function submitScoreIfHighScore(
   username: string,
   score: number,
   localHighScore?: number,
   mode: LeaderboardMode | GameMode | string = 'Missions',
-  forceUpdate?: boolean
+  forceUpdate?: boolean,
+  achievedAt?: string | Date
 ): Promise<SubmitScoreResult> {
   const userId = getOrCreatePlayerId();
-  return submitScore(userId, username, score, mode, localHighScore, forceUpdate);
+  return submitScore(userId, username, score, mode, localHighScore, forceUpdate, achievedAt);
 }
 
 /**
@@ -429,14 +482,11 @@ export async function deleteAllPlayerScoresFromLeaderboard(
  * @returns 取消訂閱函數 (Unsubscribe)
  */
 /**
- * 格式化排行榜日期（統一使用 M/D/YYYY，就算剛剛創立也用日期標示，絕不顯示「剛剛」）
+ * 格式化排行榜日期（統一使用 M/D/YYYY，絕不無故顯示今天）
  */
 export function formatLeaderboardDate(rawDate?: any): string {
   try {
-    if (!rawDate) {
-      const now = new Date();
-      return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
-    }
+    if (!rawDate) return '';
     let d: Date | null = null;
     if (rawDate instanceof Date) {
       d = rawDate;
@@ -457,8 +507,7 @@ export function formatLeaderboardDate(rawDate?: any): string {
       return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
     }
   } catch {}
-  const now = new Date();
-  return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+  return '';
 }
 
 export interface SeedEntry {
@@ -544,7 +593,7 @@ export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): Fi
   const targetMode = normalizeMode(mode);
   if (typeof window !== 'undefined') {
     try {
-      const cached = localStorage.getItem(`snake_pro_top20_cache_${targetMode}`);
+      const cached = localStorage.getItem(`snake_pro_top20_v3_${targetMode}`);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length >= 20) {
@@ -552,8 +601,8 @@ export function getInitialLeaderboardEntries(mode: LeaderboardMode | string): Fi
             ...p,
             formattedDate:
               p.formattedDate === '剛剛' || p.formattedDate === '雲端記錄'
-                ? formatLeaderboardDate(p.updatedAt)
-                : (p.formattedDate || formatLeaderboardDate(p.updatedAt)),
+                ? formatLeaderboardDate(p.achievedAt || p.updatedAt)
+                : (p.formattedDate || formatLeaderboardDate(p.achievedAt || p.updatedAt)),
           }));
         }
       }
@@ -614,8 +663,9 @@ export function subscribeToTop20Leaderboard(
         playerRank = rank;
       }
 
-      // 格式化時間：以真實日期標示，就算是剛剛才創的記錄，也以日期標示
-      const formattedDate = formatLeaderboardDate(data.updatedAt);
+      // 格式化時間：以真實創紀錄日期標示 (achievedAt || updatedAt || createdAt)
+      const dateSource = data.achievedAt || data.updatedAt || data.createdAt;
+      const formattedDate = formatLeaderboardDate(dateSource);
 
       entries.push({
         id: docSnap.id || `entry_${entryUserId}`,
@@ -624,6 +674,7 @@ export function subscribeToTop20Leaderboard(
         score: Number(data.score) || 0,
         mode: targetMode,
         rank,
+        achievedAt: (data.achievedAt as Timestamp) || null,
         updatedAt: (data.updatedAt as Timestamp) || null,
         formattedDate,
         isCurrentPlayer: isCurrent,
@@ -661,7 +712,7 @@ export function subscribeToTop20Leaderboard(
 
     if (entries.length > 0) {
       try {
-        localStorage.setItem(`snake_pro_top20_cache_${targetMode}`, JSON.stringify(entries));
+        localStorage.setItem(`snake_pro_top20_v3_${targetMode}`, JSON.stringify(entries));
       } catch {
         // ignore
       }
@@ -747,8 +798,8 @@ export async function getPlayerCloudScore(
 }
 
 /**
- * 一鍵將玩家本地所有模式 (經典 Classic, 闖關 Missions, 計時 Time) 的最高分自動同步至 Firestore 排行榜
- * 確保已取得的高分不會只留存在本機，而是順利進入雲端排行榜
+ * 將玩家本地所有模式 (經典 Classic, 闖關 Missions, 計時 Time) 的最高分安全同步至 Firestore 排行榜
+ * 核心原則：已存在的紀錄絕對保留原始創紀錄日期，絕不可覆蓋為今天！
  */
 export async function syncAllLocalHighScores(
   profile: PlayerProfile
@@ -768,7 +819,7 @@ export async function syncAllLocalHighScores(
   const missionsScore = getSanitizedHighScore(profile, 'LEVELS');
   const timeVerifiedScore = getSanitizedHighScore(profile, 'TIME_ATTACK');
 
-  // 跨模式污染檢測：若先前文檔曾記錄過污染數據，標記 forceUpdate 以強制覆蓋
+  // 跨模式污染檢測：若先前文檔曾記錄過污染數據，標記 forceUpdate 以強制覆蓋數值
   const isClassicCorrupted = isClassicTrulyPlayed && (
     ((profile.highScores?.CLASSIC === profile.highScores?.TIME_ATTACK) && (profile.highScores?.TIME_ATTACK || 0) > 0) ||
     ((profile.highScores?.CLASSIC === profile.highScores?.LEVELS) && (profile.highScores?.LEVELS || 0) > 0)
@@ -787,10 +838,14 @@ export async function syncAllLocalHighScores(
     deletePlayerScore(userId, 'Classic').catch(() => {});
   }
 
-  const tasks: { mode: LeaderboardMode; score: number; forceUpdate?: boolean }[] = [
-    { mode: 'Classic', score: classicVerifiedScore, forceUpdate: true },
-    { mode: 'Missions', score: missionsScore, forceUpdate: true },
-    { mode: 'Time', score: timeVerifiedScore, forceUpdate: true },
+  const classicDate = profile.highScoreDates?.CLASSIC;
+  const missionsDate = profile.highScoreDates?.LEVELS;
+  const timeDate = profile.highScoreDates?.TIME_ATTACK;
+
+  const tasks: { mode: LeaderboardMode; score: number; forceUpdate?: boolean; date?: string }[] = [
+    { mode: 'Classic', score: classicVerifiedScore, forceUpdate: isClassicCorrupted, date: classicDate },
+    { mode: 'Missions', score: missionsScore, forceUpdate: false, date: missionsDate },
+    { mode: 'Time', score: timeVerifiedScore, forceUpdate: isTimeCorrupted, date: timeDate },
   ];
 
   const results: Record<LeaderboardMode, SubmitScoreResult | null> = {
@@ -802,10 +857,11 @@ export async function syncAllLocalHighScores(
   let syncedCount = 0;
 
   await Promise.all(
-    tasks.map(async ({ mode, score, forceUpdate }) => {
+    tasks.map(async ({ mode, score, forceUpdate, date }) => {
       if (score > 0) {
         try {
-          const res = await submitScore(userId, username, score, mode, undefined, forceUpdate);
+          // 安全同步：若雲端已存在相同或更高分數，保留雲端真實創紀錄日期，絕不覆蓋為今天！
+          const res = await submitScore(userId, username, score, mode, undefined, forceUpdate, date);
           results[mode] = res;
           if (res.updated) {
             syncedCount++;
@@ -822,7 +878,7 @@ export async function syncAllLocalHighScores(
 
 /**
  * 更新玩家在 Firestore 排行榜所有已記錄模式 (Classic, Missions, Time) 中的暱稱
- * 僅更新已存在文檔，絕不在未玩過或未記錄模式建立假紀錄
+ * 僅更新已存在文檔，只更新暱稱，絕不改動創紀錄日期
  */
 export async function updatePlayerUsernameInLeaderboard(
   _newUsername?: string
@@ -836,13 +892,10 @@ export async function updatePlayerUsernameInLeaderboard(
         const docRef = doc(db, COLLECTION_NAME, `${playerId}_${m}`);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-          const data = snap.data();
+          // 注意：只更新 userId 和 username，絕不更新 updatedAt！
           await updateDoc(docRef, {
             userId: playerId,
             username: playerId.slice(0, 30),
-            score: typeof data.score === 'number' ? data.score : 0,
-            mode: m,
-            updatedAt: serverTimestamp(),
           });
         }
       } catch {
