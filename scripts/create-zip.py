@@ -1,7 +1,7 @@
 import os
 import zipfile
 
-zip_path = 'public/snake_project_ios_49.zip'
+zip_path = 'public/snake_project_ios_50.zip'
 if os.path.exists(zip_path):
     os.remove(zip_path)
 

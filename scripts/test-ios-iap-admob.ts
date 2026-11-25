@@ -1709,6 +1709,79 @@ async function main() {
     assert.equal(iapServiceTs.includes('releaseActiveIOSPurchaseIfMatched'), false, 'productId-based premature lock release must be completely removed');
   });
 
+  // T30: V50 CI/CD Signing Scope Isolation, Certificate Safety & Diagnostic Log Audit
+  await runTest('T30 (V50 CI/CD Hotfix): Project-Level has ZERO signing overrides, Main App Target has Manual Signing, Fastfile has NO global xcargs signing & NO cert auto-revocation', () => {
+    const pbxproj = fs.readFileSync(path.resolve(process.cwd(), 'ios/App/App.xcodeproj/project.pbxproj'), 'utf8');
+
+    // Helper to extract XCBuildConfiguration block by UUID
+    const extractConfigBlock = (uuid: string): string => {
+      const m = pbxproj.match(new RegExp(`${uuid}\\s*/\\*[^*]*\\*/\\s*=\\s*\\{[\\s\\S]*?\\n\\t\\t\\};`));
+      assert.ok(m, `Missing XCBuildConfiguration block for UUID ${uuid}`);
+      return m[0];
+    };
+
+    // Project-Level Debug & Release MUST NOT contain any signing/provisioning overrides (which leak to SPM bundles)
+    const forbiddenProjectKeys = [
+      'PROVISIONING_PROFILE_SPECIFIER',
+      'PROVISIONING_PROFILE',
+      'CODE_SIGN_STYLE',
+      'CODE_SIGN_IDENTITY',
+      'DEVELOPMENT_TEAM',
+      'OTHER_CODE_SIGN_FLAGS',
+    ];
+    for (const projCfgId of ['504EC3141FED79650016851F', '504EC3151FED79650016851F']) {
+      const block = extractConfigBlock(projCfgId);
+      for (const key of forbiddenProjectKeys) {
+        assert.equal(
+          block.includes(key),
+          false,
+          `Project-Level config ${projCfgId} MUST NOT contain ${key}`
+        );
+      }
+    }
+
+    // Main App Target Debug & Release MUST have Manual Signing & confirmed identifiers, and NO hardcoded stale temporary profile
+    for (const appCfgId of ['504EC3171FED79650016851F', '504EC3181FED79650016851F']) {
+      const block = extractConfigBlock(appCfgId);
+      assert.ok(block.includes('CODE_SIGN_STYLE = Manual;'), `App target config ${appCfgId} must set CODE_SIGN_STYLE = Manual`);
+      assert.ok(block.includes('DEVELOPMENT_TEAM = N2S5289QDM;'), `App target config ${appCfgId} must set DEVELOPMENT_TEAM = N2S5289QDM`);
+      assert.ok(block.includes('CODE_SIGN_IDENTITY = "Apple Distribution";'), `App target config ${appCfgId} must set CODE_SIGN_IDENTITY`);
+      assert.ok(block.includes('PRODUCT_BUNDLE_IDENTIFIER = elemall.snakegame.1;'), `App target config ${appCfgId} must set elemall.snakegame.1`);
+      assert.ok(block.includes('CURRENT_PROJECT_VERSION = 253;'), `App target config ${appCfgId} must set baseline build 253`);
+      assert.equal(block.includes('1792763888'), false, 'Stale temporary profile 1792763888 must be removed');
+      assert.equal(block.includes('1793016646'), false, 'Stale temporary profile 1793016646 must be removed');
+      assert.equal(block.includes('1795607289'), false, 'Stale temporary profile 1795607289 must be removed');
+    }
+
+    // Fastfile code-only lines (strip comments) audit
+    const fastfileRaw = fs.readFileSync(path.resolve(process.cwd(), 'ios/App/fastlane/Fastfile'), 'utf8');
+    const fastfileCode = fastfileRaw
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+
+    assert.equal(fastfileCode.includes('xcargs:'), false, 'Fastfile must NOT pass global xcargs signing overrides to build_app');
+    assert.equal(fastfileCode.includes('CODE_SIGNING_ALLOWED=NO'), false, 'Fastfile must NEVER use CODE_SIGNING_ALLOWED=NO');
+    assert.equal(fastfileCode.includes('CODE_SIGNING_REQUIRED=NO'), false, 'Fastfile must NEVER use CODE_SIGNING_REQUIRED=NO');
+    assert.equal(fastfileCode.includes('OTHER_CODE_SIGN_FLAGS='), false, 'Fastfile must NOT pass global OTHER_CODE_SIGN_FLAGS in xcargs');
+    assert.equal(fastfileCode.includes('.delete!'), false, 'Fastfile must NEVER auto-revoke Apple Distribution certificates (.delete!)');
+    assert.equal(fastfileCode.includes('1793016646'), false, 'Fastfile must NOT hardcode temporary profile fallback');
+    assert.equal(fastfileCode.includes('1792763888'), false, 'Fastfile must NOT hardcode temporary profile fallback');
+
+    assert.ok(fastfileCode.includes('export_method: "app-store"'), 'Fastfile must retain app-store export_method');
+    assert.ok(fastfileCode.includes('signingStyle: "manual"'), 'Fastfile must retain manual signingStyle in export_options');
+    assert.ok(fastfileCode.includes('bundle_id => profile_name'), 'Fastfile export_options must map bundle_id => profile_name');
+    assert.ok(fastfileCode.includes('buildlog_path: build_logs_dir'), 'Fastfile must persist full xcodebuild logs');
+    assert.ok(fastfileCode.includes('collect_and_print_xcode_diagnostics'), 'Fastfile must print Xcode diagnostic errors on failure');
+    assert.ok(fastfileCode.includes('com.apple.product-type.application'), 'Fastfile Xcodeproj patch must filter strictly to main application target');
+
+    // Codemagic YAML audit
+    const codemagic = fs.readFileSync(path.resolve(process.cwd(), 'codemagic.yaml'), 'utf8');
+    assert.ok(codemagic.includes('build/logs/**/*.log'), 'codemagic.yaml must collect build/logs/**/*.log artifacts');
+    assert.ok(codemagic.includes('$HOME/Library/Logs/gym/*.log'), 'codemagic.yaml must collect gym logs in artifacts');
+    assert.ok(codemagic.includes('set -o pipefail'), 'codemagic.yaml must enable pipefail when tee-ing fastlane output');
+  });
+
   const passed = results.filter((r) => r.passed).length;
   const failed = results.filter((r) => !r.passed).length;
   console.log(`\n=== Test Summary: ${passed}/${results.length} PASSED, ${failed} FAILED ===\n`);

@@ -58,16 +58,33 @@ workflows:
 
       - name: Build Signed IPA with Fastlane
         script: |
-          echo "=== Verifying Credentials in Environment ==="
+          set -o pipefail
+          mkdir -p build/logs
+
+          echo "=== Verifying Credentials Presence (Secrets Redacted) ==="
           echo "APP_STORE_KEY_ID: ${APP_STORE_KEY_ID:-[EMPTY]}"
           echo "APP_STORE_ISSUER_ID: ${APP_STORE_ISSUER_ID:-[EMPTY]}"
           if [ -n "$APP_STORE_PRIVATE_KEY" ]; then
-            echo "APP_STORE_PRIVATE_KEY length: ${#APP_STORE_PRIVATE_KEY} chars"
+            echo "APP_STORE_PRIVATE_KEY: [Present, length=${#APP_STORE_PRIVATE_KEY} chars]"
           else
             echo "APP_STORE_PRIVATE_KEY: [EMPTY]"
           fi
+          if [ -n "$BUILD_CERTIFICATE_BASE64" ] || [ -n "$CM_CERTIFICATE" ]; then
+            echo "DISTRIBUTION_P12_SECRET: [Present]"
+          else
+            echo "DISTRIBUTION_P12_SECRET: [Not Set - will check keychain or available Apple certificate slot]"
+          fi
+
+          copy_gym_logs() {
+            mkdir -p "$CM_BUILD_DIR/build/logs" 2>/dev/null || mkdir -p build/logs || true
+            if [ -d "$HOME/Library/Logs/gym" ]; then
+              cp -f "$HOME/Library/Logs/gym/"*.log "$CM_BUILD_DIR/build/logs/" 2>/dev/null || true
+            fi
+          }
+          trap copy_gym_logs EXIT
+
           cd ios/App
-          fastlane build_signed_ipa
+          fastlane build_signed_ipa 2>&1 | tee ../../build/logs/fastlane-build-signed-ipa.log
 
       - name: Patch IPA (iPhone Only & Clean App Icons)
         script: |
@@ -95,3 +112,6 @@ workflows:
 
     artifacts:
       - build/SnakePro.ipa
+      - build/logs/**/*.log
+      - build/logs/**/*.txt
+      - $HOME/Library/Logs/gym/*.log
