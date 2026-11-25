@@ -1,3 +1,12 @@
-// Generated and patched for standalone Android Studio build
+// Patched for standalone Android Studio build (no node_modules required)
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('./capacitor-android')
+
+include ':capacitor-community-admob'
+project(':capacitor-community-admob').projectDir = new File('./capacitor-community-admob')
+
+include ':capacitor-app'
+project(':capacitor-app').projectDir = new File('./capacitor-app')
+
+include ':capgo-native-purchases'
+project(':capgo-native-purchases').projectDir = new File('./capgo-native-purchases')

@@ -25,11 +25,11 @@ export interface MobileIAPProduct {
 export type AppleIAPProduct = MobileIAPProduct;
 
 export const MOBILE_IAP_CONFIG = {
-  // 雙平台統一 Package Name / Bundle Identifier (正式註冊)
+  // 雙平台正式 Package Name / Bundle Identifier
   bundleId: 'elemall.snakegame.1',
-  packageName: 'elemall.snakegame.1',
+  packageName: 'com.elemall.snakegame',
   // 是否處於測試 / 沙盒模式
-  isSandbox: true,
+  isSandbox: false,
   // 隱私權政策與服務條款 (Apple 與 Google Play 雙平台審查硬性必備)
   privacyPolicyUrl: 'https://jolly-sundae-9ed76d.netlify.app',
   termsOfUseUrl: 'https://cerulean-llama-27f5a0.netlify.app',
@@ -47,7 +47,7 @@ export const APPLE_HEARTS_PRODUCTS: MobileIAPProduct[] = [
     type: 'consumable',
     category: 'HEARTS',
     amount: 10,
-    priceUSD: 1.00,
+    priceUSD: 0.99,
     priceTag: '$1.00 USD',
     nameZhHK: '基礎愛心袋 (10 顆心)',
     nameZhCN: '基础爱心袋 (10 颗心)',
@@ -114,7 +114,7 @@ export const APPLE_COINS_PRODUCTS: MobileIAPProduct[] = [
     type: 'consumable',
     category: 'COINS',
     amount: 50000,
-    priceUSD: 1.00,
+    priceUSD: 0.99,
     priceTag: '$1.00 USD',
     nameZhHK: '金幣小錢包 (50,000 金幣)',
     nameZhCN: '金币小钱包 (50,000 金币)',
@@ -171,3 +171,20 @@ export const APPLE_COINS_PRODUCTS: MobileIAPProduct[] = [
     descriptionZhHK: '土豪專享！贈送 200,000 金幣！',
   },
 ];
+
+export const ALL_APPLE_IAP_PRODUCTS: MobileIAPProduct[] = [
+  ...APPLE_HEARTS_PRODUCTS,
+  ...APPLE_COINS_PRODUCTS,
+];
+
+export const ALL_APPLE_PRODUCT_IDS: string[] = ALL_APPLE_IAP_PRODUCTS.map(
+  (p) => p.appleProductId
+);
+
+/**
+ * 計算單件消耗型商品的實際派發總量 (基礎量 + Bonus 贈送量)
+ */
+export function getProductTotalGrant(product: MobileIAPProduct, quantity = 1): number {
+  const safeQty = Number.isFinite(quantity) && quantity >= 1 ? Math.floor(quantity) : 1;
+  return (product.amount + (product.bonusAmount || 0)) * safeQty;
+}

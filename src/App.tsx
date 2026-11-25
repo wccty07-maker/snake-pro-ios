@@ -50,6 +50,16 @@ import {
   deleteAllPlayerScoresFromLeaderboard,
 } from './services/leaderboardService';
 import { getSanitizedHighScore, sanitizeProfileHighScores } from './utils/scoreIsolation';
+import { admobService, isCapacitorNative } from './services/admobService';
+import { iapService } from './services/iapService';
+import {
+  commitConsumableGrantAtomically,
+  createIOSAuthoritativeProfileStore,
+  getMergedLedger,
+  sanitizeLedger,
+  buildResetPlayerProfile,
+  type IOSAuthoritativeProfileStore,
+} from './services/iapLedger';
 
 const STORAGE_PROFILE_KEY = 'snake_pro_profile_v2';
 const STORAGE_ACHIEVEMENTS_KEY = 'snake_pro_achievements_v2';
@@ -69,8 +79,19 @@ export default function App() {
     return () => clearInterval(timer);
   }, [currentDateStr]);
 
+  // Pre-initialize AdMob (Android: existing preload flow; iOS: UMP consent first -> preload only if allowed)
+  useEffect(() => {
+    if (iapService.isNativeIOS()) {
+      void admobService.initializeConsentAndAdsForIOS();
+      void iapService.loadIOSProducts();
+    } else if (isCapacitorNative()) {
+      // Android 既有啟動行為維持原狀
+      void admobService.preloadRewardedAd();
+    }
+  }, []);
+
   // Load saved profile with migration fallback
-  const [profile, setProfile] = useState<PlayerProfile>(() => {
+  const [profile, setProfileRaw] = useState<PlayerProfile>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_PROFILE_KEY);
       if (saved) {
@@ -185,7 +206,7 @@ export default function App() {
         const safeUnlockedLevel = Math.max(1, sequentialUnlocked);
 
         let safeLastSelected = typeof parsed.lastSelectedLevel === 'number' ? parsed.lastSelectedLevel : safeUnlockedLevel;
-        if (safeLastSelected > safeUnlockedLevel || safeLastSelected < 1) {
+        if (safeLastSelected > LEVEL_MISSIONS.length || safeLastSelected < 1) {
           safeLastSelected = safeUnlockedLevel;
         }
 
@@ -303,6 +324,9 @@ export default function App() {
           highScoreDates: parsed.highScoreDates || {},
           levelHighScores: parsed.levelHighScores || {},
           seenItems: Array.isArray(parsed.seenItems) ? parsed.seenItems : [],
+          iapTransactionLedger: getMergedLedger({
+            iapTransactionLedger: sanitizeLedger(parsed.iapTransactionLedger),
+          }),
         };
       }
     } catch {
@@ -316,12 +340,37 @@ export default function App() {
       dailyAdWatchDate: todayStr,
       dailyAdWatchCount: 0,
       seenItems: [],
+      iapTransactionLedger: getMergedLedger(undefined),
     };
   });
 
   const profileRef = useRef(profile);
+  const iosProfileStoreRef = useRef<IOSAuthoritativeProfileStore | null>(null);
+  if (iapService.isNativeIOS() && !iosProfileStoreRef.current) {
+    iosProfileStoreRef.current = createIOSAuthoritativeProfileStore(profile);
+    profileRef.current = iosProfileStoreRef.current.getSnapshot();
+  }
+
+  const setProfile = useCallback((action: React.SetStateAction<PlayerProfile>) => {
+    if (iapService.isNativeIOS() && iosProfileStoreRef.current) {
+      const store = iosProfileStoreRef.current;
+      const prev = store.getSnapshot();
+      const next = store.applyUpdate(action);
+      profileRef.current = next;
+      if (next !== prev) {
+        setProfileRaw(next);
+      }
+      return;
+    }
+    setProfileRaw(action);
+  }, []);
+
+  // Only sync profileRef from React render on Android / Web;
+  // on iOS, profileRef.current is strictly owned by iosProfileStoreRef so stale renders never regress it.
   useEffect(() => {
-    profileRef.current = profile;
+    if (!iapService.isNativeIOS()) {
+      profileRef.current = profile;
+    }
   }, [profile]);
 
   // 全面洗淨本地 profile.highScores 跨模式污染
@@ -610,6 +659,93 @@ export default function App() {
     }, 2500);
   }, []);
 
+  // iOS StoreKit 2 交易原子派發器與未完成交易恢復（Crash / 中斷 / 延遲核准重啟補發）
+  // Android 平台不會觸發 iOS 專用恢復路徑，維持既有運作邏輯
+  useEffect(() => {
+    const unsubscribeFulfillment = iapService.registerFulfillmentHandler((entry) => {
+      if (iapService.isNativeIOS() && iosProfileStoreRef.current) {
+        const result = iosProfileStoreRef.current.commitIAPGrant(entry);
+        if ((result.status === 'GRANTED' || result.status === 'DUPLICATE') && result.nextProfile) {
+          const authoritative = iosProfileStoreRef.current.getSnapshot();
+          profileRef.current = authoritative;
+          setProfileRaw(authoritative);
+        }
+        return {
+          status: result.status,
+          error: result.error,
+          backupSyncFailed: result.backupSyncFailed,
+        };
+      }
+      const result = commitConsumableGrantAtomically(profileRef.current, entry);
+      if ((result.status === 'GRANTED' || result.status === 'DUPLICATE') && result.nextProfile) {
+        profileRef.current = result.nextProfile;
+        setProfileRaw(result.nextProfile);
+      }
+      return {
+        status: result.status,
+        error: result.error,
+        backupSyncFailed: result.backupSyncFailed,
+      };
+    });
+
+    const unsubscribeRecovery = iapService.onIOSRecoveryGrant((evt) => {
+      const lang = profileRef.current.language || 'zh-HK';
+      soundEngine.playSpecialEat();
+      try {
+        confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+      } catch {
+        // ignore
+      }
+      const msg =
+        evt.category === 'HEARTS'
+          ? lang === 'en'
+            ? `Recovered App Store purchase: +${evt.grantedAmount} Hearts! ❤️`
+            : lang === 'ja'
+            ? `未完了の購入を復元しました：ハート +${evt.grantedAmount}！❤️`
+            : lang === 'zh-CN'
+            ? `已自动补发未完成的 App Store 购买：+${evt.grantedAmount} 颗爱心！❤️`
+            : `已自動補發未完成的 App Store 購買：+${evt.grantedAmount} 顆愛心！❤️`
+          : lang === 'en'
+          ? `Recovered App Store purchase: +${evt.grantedAmount.toLocaleString()} Coins! 🪙`
+          : lang === 'ja'
+          ? `未完了の購入を復元しました：コイン +${evt.grantedAmount.toLocaleString()}！🪙`
+          : lang === 'zh-CN'
+          ? `已自动补发未完成的 App Store 购买：+${evt.grantedAmount.toLocaleString()} 金币！🪙`
+          : `已自動補發未完成的 App Store 購買：+${evt.grantedAmount.toLocaleString()} 金幣！🪙`;
+      showHeartNotice(msg);
+    });
+
+    if (iapService.isNativeIOS()) {
+      void iapService.recoverUnfinishedIOSTransactions(profileRef.current.language || 'en');
+
+      const handleResumeCheck = () => {
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          void iapService.checkPendingIOSPurchaseStatus(profileRef.current.language || 'en');
+          if (admobService.getIOSConsentState().canRequestAds) {
+            void admobService.preloadRewardedAd();
+          }
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleResumeCheck);
+      window.addEventListener('focus', handleResumeCheck);
+      window.addEventListener('pageshow', handleResumeCheck);
+
+      return () => {
+        unsubscribeRecovery();
+        unsubscribeFulfillment();
+        document.removeEventListener('visibilitychange', handleResumeCheck);
+        window.removeEventListener('focus', handleResumeCheck);
+        window.removeEventListener('pageshow', handleResumeCheck);
+      };
+    }
+
+    return () => {
+      unsubscribeRecovery();
+      unsubscribeFulfillment();
+    };
+  }, [showHeartNotice]);
+
   // Complete tutorial handler: awards coins + heart ONCE ONLY (never rewards again)
   const handleCompleteTutorial = useCallback(() => {
     setProfile((prev) => {
@@ -766,18 +902,30 @@ export default function App() {
   }, [profile.hearts, profile.maxHearts, profile.lastHeartRefillTimestamp, now]);
 
   // Sync regenerated hearts to player profile when refill interval completes
+  // iOS: 使用 iosProfileStoreRef 同步計算自然回復，避免與 IAP / 廣告獎勵競爭或截斷已購買愛心
+  // Android / Web: 維持原有行為不變
   useEffect(() => {
     if (
       heartsState.hearts !== profile.hearts ||
       heartsState.lastHeartRefillTimestamp !== profile.lastHeartRefillTimestamp
     ) {
+      if (iapService.isNativeIOS() && iosProfileStoreRef.current) {
+        const store = iosProfileStoreRef.current;
+        const prev = store.getSnapshot();
+        const next = store.applyNaturalHeartRefill(now);
+        profileRef.current = next;
+        if (next !== prev) {
+          setProfileRaw(next);
+        }
+        return;
+      }
       setProfile((prev) => ({
         ...prev,
-        hearts: heartsState.hearts,
+        hearts: Math.max(typeof prev.hearts === 'number' ? prev.hearts : 0, heartsState.hearts),
         lastHeartRefillTimestamp: heartsState.lastHeartRefillTimestamp,
       }));
     }
-  }, [heartsState.hearts, heartsState.lastHeartRefillTimestamp, profile.hearts, profile.lastHeartRefillTimestamp]);
+  }, [heartsState.hearts, heartsState.lastHeartRefillTimestamp, profile.hearts, profile.lastHeartRefillTimestamp, now, setProfile]);
 
   // Current active level mission
   const currentLevel = useMemo(() => {
@@ -814,8 +962,12 @@ export default function App() {
     currentLevel?: LevelMission;
   }>({ score: 0, coinsEarned: 0, applesEaten: 0, isNewHigh: false });
 
-  // Save profile changes
+  // Save profile changes (iOS uses monotonic revision + ledger guard via authoritative store; Android/Web unchanged)
   useEffect(() => {
+    if (iapService.isNativeIOS() && iosProfileStoreRef.current) {
+      iosProfileStoreRef.current.persistIfCurrent(profile);
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
     } catch {
@@ -1798,6 +1950,28 @@ export default function App() {
 
   // Add hearts handler (via ads, coins, or IAP)
   const handleAddHearts = useCallback((amount: number, coinCost?: number): boolean => {
+    if (iapService.isNativeIOS() && iosProfileStoreRef.current) {
+      const store = iosProfileStoreRef.current;
+      const latest = store.getSnapshot();
+      if (coinCost && latest.coins < coinCost) {
+        return false;
+      }
+      const next = store.applyUpdate((prev) => {
+        if (coinCost && prev.coins < coinCost) return prev;
+        const nextCoins = coinCost ? Math.max(0, prev.coins - coinCost) : prev.coins;
+        const nextHearts = prev.hearts + amount;
+        return {
+          ...prev,
+          coins: nextCoins,
+          hearts: nextHearts,
+        };
+      });
+      profileRef.current = next;
+      if (next !== latest) {
+        setProfileRaw(next);
+      }
+      return true;
+    }
     if (coinCost && profile.coins < coinCost) {
       return false;
     }
@@ -1811,11 +1985,20 @@ export default function App() {
       };
     });
     return true;
-  }, [profile.coins]);
+  }, [profile.coins, setProfile]);
 
   // Free short video ad reward handler: max 5 times per day (+1 heart per ad)
   const handleWatchAdReward = useCallback((): boolean => {
     const today = getTodayDateString();
+    if (iapService.isNativeIOS() && iosProfileStoreRef.current) {
+      const store = iosProfileStoreRef.current;
+      const res = store.applyAdRewardHeart(today, 5);
+      if (res.rewarded) {
+        profileRef.current = res.profile;
+        setProfileRaw(res.profile);
+      }
+      return res.rewarded;
+    }
     let rewarded = false;
     setProfile((prev) => {
       const isNewDay = prev.dailyAdWatchDate !== today;
@@ -1832,7 +2015,7 @@ export default function App() {
       };
     });
     return rewarded;
-  }, []);
+  }, [setProfile]);
 
   const handleClaimAchievementReward = (achId: string) => {
     setAchievements((prev) => {
@@ -2033,8 +2216,11 @@ export default function App() {
     setIsSettingsOpen(false);
 
     // 1. 立即生成全新乾淨的 PlayerProfile，所有模式高分與場次徹底歸零，本機零延遲生效
+    //    iOS：保留當前 Hearts（不被 maxHearts: 5 截斷）、Coins 餘額與 IAP Transaction Ledger，保障玩家已購買資源；
+    //    Android / Web：完全維持既有行為 (hearts: 5, coins: 0)。
+    const isNativeIOS = iapService.isNativeIOS();
     const resetProfile = createDefaultPlayerProfile(userLang);
-    const freshProfile: PlayerProfile = {
+    const baseResetProfile: PlayerProfile = {
       ...resetProfile,
       language: userLang,
       hasCustomLanguage: profile.hasCustomLanguage ?? false,
@@ -2062,16 +2248,32 @@ export default function App() {
       unlockedLevel: 1,
       lastSelectedLevel: 1,
       seenItems: [],
+      // 保留已完成的 IAP Transaction ID Ledger，防止重設進度後重複派發舊交易
+      iapTransactionLedger: getMergedLedger(profileRef.current),
     };
 
-    setProfile(freshProfile);
-    setAchievements(INITIAL_ACHIEVEMENTS);
+    if (isNativeIOS && iosProfileStoreRef.current) {
+      const freshProfile = iosProfileStoreRef.current.resetProgress(baseResetProfile);
+      profileRef.current = freshProfile;
+      setProfileRaw(freshProfile);
+      setAchievements(INITIAL_ACHIEVEMENTS);
+      try {
+        localStorage.setItem(STORAGE_ACHIEVEMENTS_KEY, JSON.stringify(INITIAL_ACHIEVEMENTS));
+      } catch {
+        // ignore
+      }
+    } else {
+      const freshProfile = buildResetPlayerProfile(profileRef.current, baseResetProfile, isNativeIOS);
+      profileRef.current = freshProfile;
+      setProfile(freshProfile);
+      setAchievements(INITIAL_ACHIEVEMENTS);
 
-    try {
-      localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(freshProfile));
-      localStorage.setItem(STORAGE_ACHIEVEMENTS_KEY, JSON.stringify(INITIAL_ACHIEVEMENTS));
-    } catch {
-      // ignore
+      try {
+        localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(freshProfile));
+        localStorage.setItem(STORAGE_ACHIEVEMENTS_KEY, JSON.stringify(INITIAL_ACHIEVEMENTS));
+      } catch {
+        // ignore
+      }
     }
 
     // 2. 銷毀舊 FID 並清除 Firestore 雲端排行榜中舊 FID 的各模式紀錄，並取得全新 FID
@@ -2084,19 +2286,29 @@ export default function App() {
     soundEngine.playSpecialEat();
     soundEngine.haptic('medium');
 
-    const successMsg =
-      userLang === 'en'
-        ? '🔄 Progress reset! Cloud rankings cleared.'
+    const successMsg = isNativeIOS
+      ? userLang === 'en'
+        ? '🔄 Progress reset! Hearts & Coins balances preserved.'
         : userLang === 'ja'
-        ? '🔄 初期化完了！クラウド記録を削除しました。'
+        ? '🔄 進行状況を初期化しました！ハートとコイン残高は保持されました。'
         : userLang === 'zh-CN'
-        ? '🔄 已成功重设！云端排行榜排名已移除。'
-        : '🔄 已成功重設！雲端排行榜排名已移除。';
+        ? '🔄 已重置游戏进度！当前爱心与金币余额已保留。'
+        : '🔄 已重設遊戲進度！目前愛心與金幣餘額已保留。'
+      : userLang === 'en'
+      ? '🔄 Progress reset! Cloud rankings cleared.'
+      : userLang === 'ja'
+      ? '🔄 初期化完了！クラウド記録を削除しました。'
+      : userLang === 'zh-CN'
+      ? '🔄 已成功重设！云端排行榜排名已移除。'
+      : '🔄 已成功重設！雲端排行榜排名已移除。';
     showHeartNotice(successMsg);
-  }, [profile.language, profile.hasCustomLanguage, profile.soundEnabled, profile.bgmEnabled, todayStr, showHeartNotice]);
+  }, [profile.language, profile.hasCustomLanguage, profile.soundEnabled, profile.bgmEnabled, todayStr, showHeartNotice, setProfile]);
 
-  // Toggle Unlock All Levels (試玩測試模式)
+  // Toggle Unlock All Levels (僅限開發測試；iOS 正式 Release 嚴格禁用，Android 維持原狀)
   const handleToggleUnlockAll = useCallback(() => {
+    if (!import.meta.env.DEV && iapService.isNativeIOS()) {
+      return;
+    }
     setProfile((prev) => ({
       ...prev,
       unlockAllLevels: !(prev.unlockAllLevels ?? false),

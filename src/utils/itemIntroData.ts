@@ -2,9 +2,12 @@ import { LevelMission } from '../types';
 import { SupportedLanguage } from './i18n';
 
 export type ItemIntroType =
+  | 'NORMAL'
   | 'BLUE'
   | 'GREEN'
   | 'GOLDEN'
+  | 'COIN'
+  | 'SLOW'
   | 'SHIELD'
   | 'PORTAL'
   | 'RAINBOW'
@@ -38,6 +41,51 @@ export interface ItemIntroDefinition {
 }
 
 export const ITEM_INTRO_DEFINITIONS: Record<ItemIntroType, ItemIntroDefinition> = {
+  NORMAL: {
+    id: 'NORMAL',
+    name: {
+      'zh-HK': '鮮紅蘋果',
+      'zh-CN': '鲜红苹果',
+      en: 'Red Apple',
+      ja: '赤いリンゴ',
+    },
+    category: {
+      'zh-HK': '基礎果實',
+      'zh-CN': '基础果实',
+      en: 'Basic Fruit',
+      ja: '基本フルーツ',
+    },
+    badge: {
+      'zh-HK': '成長能量',
+      'zh-CN': '成长能量',
+      en: 'Core Growth',
+      ja: '基本エネルギー',
+    },
+    icon: '🍎',
+    themeColor: '#f43f5e',
+    glowColor: 'rgba(244, 63, 94, 0.55)',
+    borderColor: 'border-rose-400/50',
+    gradientBg: 'from-rose-500/20 via-red-600/10 to-transparent',
+    statPill: {
+      'zh-HK': '⭐ +10 分 · 🐍 蛇身 +1 格 · ⏳ 計時模式 +1秒',
+      'zh-CN': '⭐ +10 分 · 🐍 蛇身 +1 格 · ⏳ 计时模式 +1秒',
+      en: '⭐ +10 Pts · 🐍 Length +1 · ⏳ +1s in Timed Mode',
+      ja: '⭐ +10 点 · 🐍 体長 +1 · ⏳ タイムモード +1秒',
+    },
+    description: {
+      'zh-HK': '奇幻大陸最經典甜美的鮮紅能量蘋果！每吞食一顆可讓萌蛇成長 1 格並獲得 10 分基礎積分；在極速計時與限時關卡中更可額外延長 1 秒時間！',
+      'zh-CN': '奇幻大陆最经典甜美的鲜红能量苹果！每吞食一颗可让萌蛇成长 1 格并获得 10 分基础积分；在极速计时与限时关卡中更可额外延长 1 秒时间！',
+      en: 'The classic juicy red energy apple! Eating one grows your snake by 1 segment and grants 10 points, plus +1 second in timed modes.',
+      ja: 'ファンタジー大陸で最も定番の真っ赤なリンゴ！食べると体が1マス伸びて10点を獲得。制限時間ステージでは残り時間が1秒延長されます！',
+    },
+    usageTip: {
+      'zh-HK': '連續不斷吃下果實可觸發高倍連擊 (Combo)，快速累積分數與蛇身長度！',
+      'zh-CN': '连续不断吃下果实可触发高倍连击 (Combo)，快速累积分数与蛇身长度！',
+      en: 'Chain apples quickly without missing to build high Combo multipliers!',
+      ja: '途切れず連続で食べてコンボ倍率を上げ、一気にスコアを稼ごう！',
+    },
+  },
+
   BLUE: {
     id: 'BLUE',
     name: {
@@ -170,6 +218,96 @@ export const ITEM_INTRO_DEFINITIONS: Record<ItemIntroType, ItemIntroDefinition> 
       'zh-CN': '金色苹果在场上会有金色倒计时光圈，几秒后会自动消失，需分秒必争抢先吞食！',
       en: 'Has a ticking golden countdown ring. Rush over to claim it before it vanishes!',
       ja: '出現後はカウントダウンリングが減少。消滅する前に優先して取りに行こう！',
+    },
+  },
+
+  COIN: {
+    id: 'COIN',
+    name: {
+      'zh-HK': '金幣巧克力',
+      'zh-CN': '金币巧克力',
+      en: 'Golden Coin',
+      ja: 'コインチョコ',
+    },
+    category: {
+      'zh-HK': '財富寶物',
+      'zh-CN': '财富宝物',
+      en: 'Treasure Drop',
+      ja: 'お宝アイテム',
+    },
+    badge: {
+      'zh-HK': '豐厚金幣',
+      'zh-CN': '丰厚金币',
+      en: 'Bonus Coins',
+      ja: 'コイン大量',
+    },
+    icon: '🪙',
+    themeColor: '#f59e0b',
+    glowColor: 'rgba(245, 158, 11, 0.65)',
+    borderColor: 'border-amber-400/50',
+    gradientBg: 'from-amber-500/20 via-orange-600/10 to-transparent',
+    statPill: {
+      'zh-HK': '⭐ +15 分 · 💰 +8 金幣 · ⏳ 計時模式 +4秒',
+      'zh-CN': '⭐ +15 分 · 💰 +8 金币 · ⏳ 计时模式 +4秒',
+      en: '⭐ +15 Pts · 💰 +8 Coins · ⏳ +4s in Timed Mode',
+      ja: '⭐ +15 点 · 💰 +8 コイン · ⏳ タイムモード +4秒',
+    },
+    description: {
+      'zh-HK': '閃耀星芒的黃金巧克力幣！會在經典無盡、極速計時模式及彩虹糖／秘庫噴寶中出現，吞食直接獲得 8 枚金幣與 15 分，是累積商店金幣的捷徑！',
+      'zh-CN': '闪耀星芒的黄金巧克力币！会在经典无尽、极速计时模式及彩虹糖／秘库喷宝中出现，吞食直接获得 8 枚金币与 15 分，是累积商店金币的捷径！',
+      en: 'A shimmering star-stamped chocolate gold coin! Appears in Classic, Time Attack, Rainbow bursts, and Vaults to grant +8 coins and +15 points.',
+      ja: '星の刻印が輝く黄金のコインチョコ！クラシックやタイムアタック、虹キャンディや秘宝出現時に登場し、一気に8コインと15点を獲得できます！',
+    },
+    usageTip: {
+      'zh-HK': '金幣道具只會限時停留數秒，看到後記得優先轉向搶收，用來解鎖新萌蛇造型與場景！',
+      'zh-CN': '金币道具只会限时停留数秒，看到后记得优先转向抢收，用来解锁新萌蛇造型与场景！',
+      en: 'Appears for a limited time—scoop it up quickly to save coins for new skins and arenas!',
+      ja: '出現時間は限られているので、見つけたら優先して回収し、ショップでスキンを解放しよう！',
+    },
+  },
+
+  SLOW: {
+    id: 'SLOW',
+    name: {
+      'zh-HK': '紫葡萄晶凍',
+      'zh-CN': '紫葡萄晶冻',
+      en: 'Slow-Mo Grape',
+      ja: 'スローグレープ',
+    },
+    category: {
+      'zh-HK': '時間緩速',
+      'zh-CN': '时间缓速',
+      en: 'Time Control',
+      ja: '時間制御',
+    },
+    badge: {
+      'zh-HK': '6秒緩速',
+      'zh-CN': '6秒缓速',
+      en: '6s Slow-Mo',
+      ja: '6秒スロー',
+    },
+    icon: '🍇',
+    themeColor: '#a855f7',
+    glowColor: 'rgba(168, 85, 247, 0.65)',
+    borderColor: 'border-purple-400/50',
+    gradientBg: 'from-purple-500/20 via-violet-600/10 to-transparent',
+    statPill: {
+      'zh-HK': '🍇 6秒減速冷靜期 · ⭐ +20 分 · 💰 +2 金幣',
+      'zh-CN': '🍇 6秒减速冷静期 · ⭐ +20 分 · 💰 +2 金币',
+      en: '🍇 6s Slow Motion · ⭐ +20 Pts · 💰 +2 Coins',
+      ja: '🍇 6秒間スピード低下 · ⭐ +20 点 · 💰 +2 コイン',
+    },
+    description: {
+      'zh-HK': '蘊含時間緩速魔法的紫葡萄晶凍！在經典與極速計時模式中出現，吞食後在 6 秒內放緩萌蛇移動節奏，讓你在高速蛇陣中輕鬆精準轉彎避險！',
+      'zh-CN': '蕴含时间缓速魔法的紫葡萄晶冻！在经典与极速计时模式中出现，吞食后在 6 秒内放缓萌蛇移动节奏，让你在高速蛇阵中轻松精准转弯避险！',
+      en: 'An enchanted grape jelly drop! Found in Classic and Time Attack modes—slows your snake down for 6 seconds for effortless precision steering.',
+      ja: '時間減速の魔法を秘めた紫ブドウゼリー！クラシックやタイムアタックに出現し、6秒間ヘビの移動速度を緩やかにして精密な操作を助けます！',
+    },
+    usageTip: {
+      'zh-HK': '當蛇身越來越長、速度變快時，吃下紫葡萄即可爭取喘息空間並重整走位路線！',
+      'zh-CN': '当蛇身越来越长、速度变快时，吃下紫葡萄即可争取喘息空间并重整走位路线！',
+      en: 'Grab this whenever your snake gets long and fast to regain calm control over tight turns!',
+      ja: '体が長くなりスピードが上がってきた時に取ると、余裕を持って安全なルートへ立て直せます！',
     },
   },
 

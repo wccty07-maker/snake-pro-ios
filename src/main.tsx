@@ -1,6 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import {AppErrorBoundary} from './components/AppErrorBoundary.tsx';
 import './index.css';
 
 // Synchronize --app-height with actual viewport height on iOS / Android mobile screens
@@ -26,6 +27,8 @@ setupViewportHeight();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>,
 );

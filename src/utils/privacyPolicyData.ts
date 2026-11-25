@@ -24,7 +24,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
   'zh-HK': {
     title: '隱私權政策 (Privacy Policy)',
     subtitle: 'Snake Pro 個人資料保護與隱私承諾',
-    lastUpdated: '2026年10月19日',
+    lastUpdated: '2026年11月24日',
     summary:
       '歡迎遊玩 Snake Pro。我們非常重視您的個人隱私權。本政策旨在向您清楚說明本遊戲如何處理遊戲存檔數據、廣告識別資訊與第三方服務互動。本遊戲致力於保護玩家隱私，絕不販售任何個人資料。',
     contactEmail: 'elemall.uk@gmail.com',
@@ -42,6 +42,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
             details: [
               '遊戲內收集的冒險金幣、當前關卡進度、愛心體力倒數。',
               '解鎖之外觀造型（Skins）、競技場地圖（Arenas）、每日簽到與成就殿堂領取紀錄。',
+              '本機應用內購交易編號紀錄（Transaction ID Ledger），僅用於防止重複派發與異常中斷後自動補發未完成交易。',
               '音效與背景音樂開啟狀態、語言偏好設定。',
               '此類資料僅儲存在您的裝置本機瀏覽器或沙盒空間中，我們不會將其與您的真實身份關聯。',
             ],
@@ -65,26 +66,26 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         ],
         subsections: [
           {
-            title: '1. Google AdMob（廣告服務）',
+            title: '1. Google AdMob 與 UMP 隱私同意（廣告服務）',
             details: [
-              '本遊戲使用 Google AdMob 提供可選之「激勵影片廣告」（觀看廣告以補充免費愛心體力，每日上限 5 次）。',
-              'AdMob SDK 可能會收集並使用您的裝置廣告識別碼（如 Android 廣告 ID 或 iOS IDFA/ATT 授權）、粗略網路位置與廣告互動數據，以展示相關廣告或防止欺詐。',
-              '查閱 Google 隱私權政策：https://policies.google.com/privacy',
+              '本遊戲使用 Google AdMob 提供完全可選之「激勵影片廣告」（於愛心補給站觀看廣告以獲得 +1 顆免費愛心，每日上限 5 次；不含橫幅、插頁或強制廣告）。',
+              '於歐洲經濟區（EEA）、英國及其他適用地區，本遊戲使用 Google User Messaging Platform (UMP) 收集並更新您的廣告隱私同意選擇；未取得合法廣告請求狀態前不會載入廣告。',
+              '於 iOS 版本中，本遊戲不請求跨 App 追蹤權限（ATT）、不讀取 IDFA，並固定向 Google AdMob 請求非個人化廣告（Non-Personalized Ads, npa=1）；惟 AdMob SDK 仍可能依地區合規與 UMP 狀態處理粗略網路位置、裝置技術資訊、廣告曝光及防詐欺訊號。查閱 Google 隱私權政策：https://policies.google.com/privacy',
             ],
           },
           {
-            title: '2. Google Firebase（雲端資料庫）',
+            title: '2. Google Firebase（雲端資料庫與匿名分析）',
             details: [
-              '我們使用 Google Firebase Firestore 提供經典無盡模式、關卡模式與計時模式之排行榜即時排位服務。',
-              '僅儲存匿名遊戲分數、過關時間與加密匿名識別碼。',
+              '我們使用 Google Firebase Firestore 與 Firebase Installations (FID) 提供經典無盡模式、關卡模式與計時模式之匿名排行榜排位服務，並使用 Firebase Analytics 記錄不關聯真實身份之基礎遊戲互動統計。',
+              '僅儲存匿名遊戲分數、過關時間、互動事件與加密匿名識別碼，絕不關聯真實身份或用於跨 App 追蹤。',
             ],
           },
           {
             title: '3. 應用商店內購（Apple App Store & Google Play）',
             details: [
-              '所有應用內購買（愛心包、金幣包）均由 Apple App Store (StoreKit) 或 Google Play 官方結算系統直接安全處理。',
+              '所有應用內購買（4 款愛心包、4 款金幣包）均由 Apple App Store (StoreKit) 或 Google Play 官方結算系統直接安全處理，並顯示商店回傳之當地貨幣真實價格。',
               '本遊戲不會接觸、收集或儲存任何信用卡號或銀行帳單資訊。',
-              '所有內購項目（愛心與金幣）均為消耗型虛擬物品，主要儲存於您的本機裝置，依應用商店規範不支援且不適用「恢復購買 (Restore Purchases)」功能。',
+              '所有 8 款內購項目均為消耗型虛擬物品（Consumable），不支援透過「恢復購買 (Restore Purchases)」重複派發已消耗商品；惟若購買過程中發生閃退或網路中斷，系統將於重啟時自動檢查並補發尚未完成之有效交易。',
             ],
           },
         ],
@@ -96,6 +97,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         content: [
           '我們收集與處理數據的唯一目的包括：',
           '• 維持遊戲正常運作、關卡進度儲存與成就判定。',
+          '• 確保應用內購交易驗證、防重複派發與未完成交易恢復。',
           '• 提供全球玩家良性公平的排行榜成績比拼。',
           '• 防範外掛作弊行為與維護伺服器穩定性。',
           '我們採取合理的業界安全措施保護資料傳輸，不進行個人輪廓畫像或出售數據予任何第三方廣告經紀商。',
@@ -117,8 +119,8 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         title: '五、玩家權利與資料控制',
         content: [
           '您隨時保有對個人遊戲資料的完整控制權利：',
-          '• 重設進度：您可以在遊戲「設定」中點擊重設資料，清空本機所有紀錄。',
-          '• 限制廣告追蹤：您可以透過 iOS【設定 > 隱私權與安全性 > 追蹤】或 Android【設定 > Google > 廣告】重設廣告 ID 或關閉個人化廣告。',
+          '• 重設進度：您可以在遊戲「設定」中點擊重設資料，清空本機關卡進度與高分紀錄；於 iOS 版本中，重設進度時會保留您目前的愛心與金幣餘額及本機交易紀錄。',
+          '• 廣告隱私選項：若您位於適用地區（如 EEA／英國），可隨時於遊戲「設定 > 隱私權與帳號管理 > 廣告隱私選項」修改同意設定；亦可透過系統設定關閉個人化廣告或重設廣告識別碼。',
           '• 刪除雲端分數：如需自全球排行榜完全移除您的分數紀錄，可在隱私面板一鍵自助抹除，或聯絡開發團隊協助處置。',
         ],
       },
@@ -136,7 +138,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
   'zh-CN': {
     title: '隐私政策 (Privacy Policy)',
     subtitle: 'Snake Pro 个人信息保护与隐私承诺',
-    lastUpdated: '2026年10月19日',
+    lastUpdated: '2026年11月24日',
     summary:
       '欢迎游玩 Snake Pro。我们极其重视您的隐私权。本政策旨在向您清晰阐述本游戏如何处理游戏数据、广告标识信息与第三方服务交互。本游戏严格遵循各地区隐私保护规范，绝不出售任何个人数据。',
     contactEmail: 'elemall.uk@gmail.com',
@@ -154,6 +156,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
             details: [
               '关卡进度、冒险金币、爱心体力倒计时。',
               '已解锁的皮肤外观、对战竞技场、成就领取记录。',
+              '本地应用内购交易编号记录（Transaction ID Ledger），仅用于防止重复派发及闪退后自动补发未完成交易。',
               '音效与背景音乐开启状态、语言偏好。',
               '此类数据仅保存在您的设备本地沙盒空间中，不会与真实个人身份进行关联。',
             ],
@@ -177,25 +180,25 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         ],
         subsections: [
           {
-            title: '1. Google AdMob（移动广告）',
+            title: '1. Google AdMob 与 UMP 隐私同意（移动广告）',
             details: [
-              '本游戏提供激励视频广告（例如看完广告获取免费爱心体力，每日上限 5 次）。',
-              'Google AdMob SDK 可能会收集移动设备广告标识符（如 Android GAID、iOS IDFA）、网络连接类型及广告展示日志，以确保广告投放正常及防范欺诈。',
-              'Google 隐私权政策：https://policies.google.com/privacy',
+              '本游戏仅提供完全可选的激励视频广告（观看后获得 +1 颗免费爱心，每日上限 5 次；不包含横幅、插页或强制广告）。',
+              '在欧洲经济区（EEA）、英国及其他适用地区，本游戏通过 Google User Messaging Platform (UMP) 征询并更新广告隐私偏好；在 SDK 确认可请求广告前不会加载广告。',
+              '在 iOS 版本中，本游戏不请求跨 App 追踪权限（ATT）、不读取 IDFA，并固定向 Google AdMob 请求非个性化广告（Non-Personalized Ads, npa=1）；但 AdMob SDK 仍可能依地区合规与 UMP 状态处理粗略网络位置、设备技术信息、广告曝光及防欺诈信号。Google 隐私权政策：https://policies.google.com/privacy',
             ],
           },
           {
-            title: '2. Google Firebase（云数据库）',
+            title: '2. Google Firebase（云数据库与匿名分析）',
             details: [
-              '使用 Google Cloud Firebase Firestore 提供全球排行排名数据服务。',
-              '仅储存匿名得分、通关时间与加密匿名识别码。',
+              '使用 Google Firebase Firestore 与 Firebase Installations (FID) 提供全球匿名排行榜服务，并使用 Firebase Analytics 记录不关联真实身份的基础交互统计。',
+              '仅储存匿名得分、通关时间、交互事件与加密匿名识别码，不用于跨 App 追踪。',
             ],
           },
           {
             title: '3. 商店官方内购结算（Apple App Store & Google Play）',
             details: [
-              '所有金币包与爱心内购均直接通过苹果 App Store 或 Google Play 官方结算处理。',
-              '开发者无权也无法获取您的信用卡或账单信息。所有内购项目（爱心与金币）均为消耗型虚拟道具，主要储存于您的本地设备，依商店规范不适用且不提供“恢复购买 (Restore Purchases)”功能。',
+              '所有 4 款爱心包与 4 款金币包均直接通过苹果 App Store (StoreKit) 或 Google Play 官方结算处理，并展示商店返回的本地货币价格。',
+              '开发者无权也无法获取您的信用卡或账单信息。所有 8 款内购均为消耗型虚拟道具，不支持通过“恢复购买”重复发放已消耗商品；若购买过程中出现闪退或网络中断，系统会在重启时自动补发未完成的有效交易。',
             ],
           },
         ],
@@ -207,6 +210,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         content: [
           '我们收集的数据仅用于：',
           '• 保障游戏正常运行、保存关卡进展与成就结算。',
+          '• 确保应用内购交易校验、防重复派发与未完成交易恢复。',
           '• 提供全球排行榜良性竞技。',
           '• 保证游戏反作弊公平环境与网络安全。',
         ],
@@ -226,8 +230,8 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         title: '五、您的数据权利与控制',
         content: [
           '您随时拥有对个人数据的完全控制：',
-          '• 本地数据清理：可在游戏设置或清理浏览器缓存随时重置。',
-          '• 广告追踪控制：可在手机系统设置中重置广告 ID 或关闭个性化广告投放。',
+          '• 本地数据清理：可在游戏设置中随时重置游戏进度；在 iOS 版本中，重置进度时会保留您当前的爱心与金币余额及本地交易记录。',
+          '• 广告隐私选项：适用地区用户可随时在游戏“设置 > 隐私权与账号管理 > 广告隐私选项”修改同意偏好，也可在系统设置中关闭个性化广告。',
           '• 排行榜删除：若希望从排行榜清除分数记录，可在面板一键自助清理，或发送邮件至开发者邮箱。',
         ],
       },
@@ -245,7 +249,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
   'en': {
     title: 'Privacy Policy',
     subtitle: 'Snake Pro · Commitment to Data Privacy & Security',
-    lastUpdated: 'October 19, 2026',
+    lastUpdated: 'November 24, 2026',
     summary:
       'Welcome to Snake Pro! We value and respect your privacy. This policy explains what information is collected, how it is used, and how third-party services (such as Google AdMob and Firebase) operate within the game. We never sell your personal data.',
     contactEmail: 'elemall.uk@gmail.com',
@@ -263,6 +267,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
             details: [
               'Coins earned, completed stages, and stamina refill timers.',
               'Unlocked snake skins, arena themes, and achievement rewards.',
+              'A local Transaction ID ledger stored solely to prevent duplicate fulfillment of in-app purchases and to recover unfinished transactions after an unexpected app close.',
               'Sound effects and BGM volume states, preferred UI language.',
               'This data is stored purely inside your device sandbox and is never tied to your real-world identity.',
             ],
@@ -286,25 +291,25 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         ],
         subsections: [
           {
-            title: '1. Google AdMob (Advertising)',
+            title: '1. Google AdMob & UMP Consent (Advertising)',
             details: [
-              'We use Google AdMob to deliver opt-in rewarded video ads (e.g. watch an ad to refill hearts/stamina, up to 5 per day).',
-              'Google AdMob SDK may collect device identifiers (such as Google Advertising ID or iOS IDFA when authorized), approximate IP location, and ad impression data for ad delivery and fraud prevention.',
-              'Review Google Privacy Policy: https://policies.google.com/privacy',
+              'We use Google AdMob exclusively for optional opt-in rewarded video ads (watch an ad in the Heart Refill Station for +1 Heart, up to 5 per day). We do not show banner, interstitial, or forced ads.',
+              'In the EEA, UK, and other applicable regions, we use Google User Messaging Platform (UMP) to gather and refresh your ad consent choices. Ads are only requested after the SDK confirms consent status.',
+              'On iOS, this app does not request App Tracking Transparency (ATT) permission, does not access IDFA, and uniformly sends Non-Personalized Ads requests (npa=1) to Google AdMob. Please note that the Google AdMob SDK may still process coarse network location, technical device signals, and ad impression/fraud-prevention metrics subject to regional regulations and UMP consent. Review Google Privacy Policy: https://policies.google.com/privacy',
             ],
           },
           {
-            title: '2. Google Firebase (Cloud Database)',
+            title: '2. Google Firebase (Cloud Database & Anonymous Analytics)',
             details: [
-              'We utilize Google Cloud Firebase Firestore to power our global leaderboards for Endless, Levels, and Time Attack modes.',
-              'Only anonymous scores, timestamps, and encrypted anonymous device identifiers are stored.',
+              'We utilize Google Firebase Firestore and Firebase Installations (FID) for anonymous global leaderboards, and Firebase Analytics for non-personally-identifiable gameplay interaction telemetry.',
+              'Only anonymous scores, timestamps, product interaction events, and encrypted anonymous device identifiers are processed—never linked to your real identity or used for cross-app tracking.',
             ],
           },
           {
             title: '3. In-App Purchases (Apple App Store & Google Play)',
             details: [
-              'All in-app purchases are securely processed directly by Apple App Store (StoreKit) or Google Play Billing.',
-              'We do not collect or have access to your credit card, bank, or billing information. All in-app purchase items (Hearts and Coins) are consumable virtual goods stored locally on your device, and do not support or require Restore Purchases.',
+              'All 8 consumable in-app purchases (4 Heart Packs and 4 Coin Packs) are securely processed directly by Apple App Store (StoreKit) or Google Play Billing using localized storefront pricing.',
+              'We do not collect or have access to your credit card, bank, or billing information. Because all items are consumables, consumed purchases cannot be re-granted via Restore Purchases; however, unfinished verified StoreKit transactions interrupted by crash or network loss are automatically recovered and fulfilled on relaunch.',
             ],
           },
         ],
@@ -316,6 +321,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         content: [
           'The data collected is used solely to:',
           '• Deliver game mechanics, persist progression, and unlock achievements.',
+          '• Verify in-app purchase fulfillment, prevent duplicate grants, and recover unfinished transactions.',
           '• Maintain fair, competitive global leaderboards.',
           '• Prevent cheating and ensure server integrity.',
         ],
@@ -336,8 +342,8 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         title: '5. Your Rights and Data Controls',
         content: [
           'You retain full control over your gameplay data:',
-          '• Reset Data: You can clear all saved data directly from the game Settings or your browser cache.',
-          '• Limit Ad Tracking: You can reset your Advertising ID or opt-out of personalized ads via your device OS settings (Settings > Privacy on iOS or Settings > Google > Ads on Android).',
+          '• Reset Data: You can clear saved gameplay progress directly from the game Settings. On iOS, resetting gameplay progress preserves your current Hearts and Coins balances as well as your local purchase ledger.',
+          '• Ad Privacy Options: In applicable regions (e.g., EEA/UK), you can update your consent preferences anytime via Settings > Privacy & Account > Ad Privacy Options, or adjust OS-level ad settings.',
           '• Leaderboard Removal: You can instantly erase your cloud scores directly from the Data Management tab, or contact us at any time.',
         ],
       },
@@ -355,7 +361,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
   'ja': {
     title: 'プライバシーポリシー (Privacy Policy)',
     subtitle: 'Snake Pro 個人情報保護とプライバシーの誓約',
-    lastUpdated: '2026年10月19日',
+    lastUpdated: '2026年11月24日',
     summary:
       '『Snake Pro』をご利用いただきありがとうございます。当ゲームはプレイヤーのプライバシーを最優先に保護します。本ポリシーでは、ゲームデータや広告識別情報、サードパーティ連携の取扱いについて説明します。個人情報を販売することは一切ありません。',
     contactEmail: 'elemall.uk@gmail.com',
@@ -373,6 +379,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
             details: [
               '獲得コイン、ステージクリア状況、ハート体力タイマー。',
               '解放されたスネークスキン、アリーナマップ、アチーブメント達成履歴。',
+              '重複付与防止および未完了決済の自動復元に使用するローカル取引ID台帳（Transaction ID Ledger）。',
               'BGM・効果音のオン/オフ、選択された言語設定。',
               'これらのデータはお客様の端末内にのみ保存され、実名等の個人情報とは一切結びつきません。',
             ],
@@ -396,24 +403,25 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         ],
         subsections: [
           {
-            title: '1. Google AdMob（広告配信）',
+            title: '1. Google AdMob および UMP 同意管理（広告配信）',
             details: [
-              'リワード動画広告（広告視聴によるハート回復など、1日最大5回）に Google AdMob を使用しています。',
-              '広告配信および不正防止の目的で、広告識別子（IDFAやGAIDなど）や通信ログを収集する場合があります。',
-              'Google プライバシーポリシー：https://policies.google.com/privacy',
+              '任意視聴のリワード動画広告（視聴でハート+1、1日最大5回）のみに Google AdMob を使用しています（バナー・インタースティシャル・強制広告はありません）。',
+              'EEA・英国等の対象地域では Google User Messaging Platform (UMP) を通じて同意状況を確認・更新し、広告リクエスト可能と確認された場合のみ広告を読み込みます。',
+              'iOS 版では App Tracking Transparency (ATT) によるクロスアプリ追跡を要求せず、IDFA にもアクセスしません。すべての iOS 広告リクエストは一貫して非パーソナライズ広告 (npa=1) として送信されます。なお Google AdMob SDK は地域規制および UMP 同意状況に応じて概算位置情報・端末技術情報・広告表示および不正防止シグナルを処理する場合があります。Google プライバシーポリシー：https://policies.google.com/privacy',
             ],
           },
           {
-            title: '2. Google Firebase（クラウドデータベース）',
+            title: '2. Google Firebase（クラウドデータベースおよび匿名分析）',
             details: [
-              'グローバルランキング機能の提供に Google Firebase Firestore を使用しています。',
-              '匿名スコア、クリア時間、暗号化された匿名IDのみが保存されます。',
+              'グローバルランキング機能の提供に Google Firebase Firestore と Firebase Installations (FID) を、個人に紐づかないゲーム操作統計に Firebase Analytics を使用しています。',
+              '匿名スコア、クリア時間、匿名操作イベント、暗号化された匿名IDのみを扱い、実名やクロスアプリ追跡とは一切紐づけません。',
             ],
           },
           {
-            title: '3. アプリ内課金（Apple & Google Play）',
+            title: '3. アプリ内課金（Apple App Store & Google Play）',
             details: [
-              'すべての課金決済は各ストアの公式決済システムにより安全に処理されます。開発者がクレジットカード情報等を保持することはありません。すべての購入アイテム（ハートおよびコイン）は端末ローカルに保存される消耗型仮想アイテムのため、「購入の復元 (Restore Purchases)」の対象外となります。',
+              '全8種類の消耗型アイテム（ハート4種・コイン4種）は各ストア公式決済システム（Apple StoreKit / Google Play）で処理され、ストアの現地通貨価格が表示されます。',
+              '開発者がクレジットカード情報等を保持することはありません。消耗済みアイテムの重複復元には対応していませんが、アプリ強制終了等で未完了となった正規取引は次回起動時に自動補填されます。',
             ],
           },
         ],
@@ -425,6 +433,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         content: [
           '収集したデータは以下の目的でのみ使用されます：',
           '• ゲームの円滑な動作および進捗の保存。',
+          '• アプリ内課金の検証、重複付与の防止、および未完了取引の復元。',
           '• 公正なグローバルランキングの集計。',
           '• 不正防止およびサーバーの安全性維持。',
         ],
@@ -442,7 +451,7 @@ export const PRIVACY_POLICY_DATA: Record<SupportedLanguage, PrivacyPolicyContent
         iconName: 'refresh',
         title: '5. プレイヤーの権利とデータ管理',
         content: [
-          'お客様はいつでもゲーム設定からローカルデータをリセットできます。また、端末の設定から広告のトラッキング制限を行うことが可能です。',
+          'お客様はいつでもゲーム設定からローカル進捗をリセットできます（iOS 版では現在のハート・コイン残高および購入履歴を保持したまま進捗を初期化します）。対象地域ではゲーム設定の「広告プライバシー設定」からいつでも同意を変更できます。',
         ],
       },
       {

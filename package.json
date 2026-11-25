@@ -12,11 +12,13 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor-community/admob": "8.4.0",
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3",
+    "@capgo/native-purchases": "8.9.16",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/qrcode": "^1.5.6",

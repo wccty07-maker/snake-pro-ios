@@ -315,4 +315,20 @@ export interface PlayerProfile {
   batterySaverEnabled?: boolean;
   targetFps?: 30 | 60;
   glowEffectsEnabled?: boolean;
+  /** Persistent transaction ID ledger to guarantee idempotent consumable IAP fulfillment (backward-compatible) */
+  iapTransactionLedger?: Record<string, IAPTransactionLedgerEntry>;
+  /** Monotonically increasing revision counter for iOS authoritative profile state consistency (backward-compatible) */
+  profileRevision?: number;
+}
+
+export interface IAPTransactionLedgerEntry {
+  transactionId: string;
+  productId: string;
+  category: 'HEARTS' | 'COINS';
+  grantedAmount: number;
+  quantity: number;
+  platform: 'ios' | 'android' | 'web';
+  grantedAt: number;
+  purchaseDate?: string;
+  environment?: 'Sandbox' | 'Production' | 'Xcode';
 }

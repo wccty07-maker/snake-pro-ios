@@ -15,6 +15,7 @@ import {
   Copy,
   FileText,
   AlertTriangle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   SupportedLanguage,
@@ -23,6 +24,8 @@ import {
 } from '../utils/i18n';
 import { CuteModalBackground } from './CuteModalBackground';
 import { getFirebaseInstallationId, getSyncCachedFID } from '../firebase';
+import { admobService, type IOSConsentState } from '../services/admobService';
+import { iapService } from '../services/iapService';
 
 interface SettingsModalProps {
   profile: PlayerProfile;
@@ -56,6 +59,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isConfirmingReset, setIsConfirmingReset] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
   const [resetSuccess, setResetSuccess] = useState<boolean>(false);
+  const [iosConsentState, setIosConsentState] = useState<IOSConsentState>(() =>
+    admobService.getIOSConsentState()
+  );
+  const [isOpeningPrivacyOptions, setIsOpeningPrivacyOptions] = useState<boolean>(false);
+
+  // iOS 專用：訂閱 Google UMP Consent 狀態，決定是否顯示 Privacy Options 入口
+  useEffect(() => {
+    if (!admobService.isNativeIOS()) return;
+    return admobService.subscribeIOSConsent(setIosConsentState);
+  }, []);
 
   // 當打開設定視窗獲取最新真實 FID
   useEffect(() => {
@@ -473,6 +486,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-sky-300 transition-colors shrink-0 ml-1.5" />
             </button>
+
+            {/* iOS UMP Ad Privacy Options (EEA / UK / Applicable Regions Only) */}
+            {admobService.isNativeIOS() && iosConsentState.privacyOptionsRequired && (
+              <button
+                type="button"
+                disabled={isOpeningPrivacyOptions}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (profile.soundEnabled) soundEngine.playClick();
+                  setIsOpeningPrivacyOptions(true);
+                  try {
+                    await admobService.showIOSPrivacyOptionsForm();
+                  } finally {
+                    setIsOpeningPrivacyOptions(false);
+                  }
+                }}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-500/50 transition-all active:scale-[0.98] cursor-pointer group text-left touch-manipulation disabled:opacity-60"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </div>
+                  <div className="font-bold text-slate-100 text-xs flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span>
+                      {currentLang === 'zh-CN'
+                        ? '广告隐私选项 (Privacy Options)'
+                        : currentLang === 'en'
+                        ? 'Ad Privacy Options'
+                        : currentLang === 'ja'
+                        ? '広告プライバシー設定 (Privacy Options)'
+                        : '廣告私隱選項 (Privacy Options)'}
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-300 transition-colors shrink-0 ml-1.5" />
+              </button>
+            )}
           </div>
 
           {/* 5. 重設本機遊戲進度 (Reset Local Game Progress) */}
@@ -517,7 +567,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           : '確定要重設本機遊戲進度？'}
                       </div>
                       <div className="text-[10.5px] text-rose-300/90 leading-relaxed mt-1">
-                        {currentLang === 'zh-CN'
+                        {iapService.isNativeIOS()
+                          ? currentLang === 'zh-CN'
+                            ? '此操作将重置关卡进度、解锁造型与场地、最高纪录及云端排行榜排名，但会保留您当前的爱心与金币余额及内购记录。此操作无法撤销！'
+                            : currentLang === 'en'
+                            ? 'This will reset stage progress, unlocked skins & arenas, local high scores, and cloud rankings, while preserving your current Hearts & Coins balances and purchase records. This action cannot be undone!'
+                            : currentLang === 'ja'
+                            ? 'ステージ進行、解放済みスキン・アリーナ、ハイスコア、クラウドランキングが初期化されます。現在のハート・コイン残高および購入履歴は保持されます。この操作は取り消せません！'
+                            : '此操作將重設關卡進度、解鎖造型與場地、最高紀錄及雲端排行榜排名，但會保留您目前的愛心與金幣餘額及內購紀錄。此操作無法復原！'
+                          : currentLang === 'zh-CN'
                           ? '此操作将清空本地所有关卡进度、金币、解锁造型与最高纪录，恢复至初次开启状态。此操作无法撤销！'
                           : currentLang === 'en'
                           ? 'This will wipe all stage levels, coins, unlocked skins, and local high scores back to defaults. This action cannot be undone!'

@@ -9,7 +9,10 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
-    // capacitor-app bypassed for build compatibility
+    implementation project(':capacitor-community-admob')
+    implementation project(':capacitor-app')
+    implementation project(':capgo-native-purchases')
+
 }
 
 

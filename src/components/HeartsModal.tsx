@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Heart, Film, CreditCard, X, Check, Sparkles, Flame, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Heart, Film, CreditCard, X, Check, Sparkles, Flame, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { soundEngine } from '../utils/audio';
-import { SupportedLanguage, LOCALIZED_HEART_PACKAGES, getTranslation } from '../utils/i18n';
+import { SupportedLanguage, getTranslation } from '../utils/i18n';
 import confetti from 'canvas-confetti';
 import { CuteModalBackground } from './CuteModalBackground';
 import { CoinIcon } from './CoinIcon';
 import { admobService, isCapacitorNative } from '../services/admobService';
-import { iapService } from '../services/iapService';
-import { APPLE_HEARTS_PRODUCTS } from '../config/iapConfig';
+import { iapService, type IOSCatalogState } from '../services/iapService';
 
 export interface HeartPackage {
   id: string;
@@ -24,7 +23,7 @@ export interface HeartPackage {
 export const HEART_PACKAGES: HeartPackage[] = [
   {
     id: 'heart_tier_1',
-    appleProductId: 'com.snake.cutemonster.hearts10',
+    appleProductId: 'com.elemall.snakegame.hearts10',
     name: '基礎愛心袋 (10 顆心)',
     hearts: 10,
     priceTag: '$1.00 USD',
@@ -32,7 +31,7 @@ export const HEART_PACKAGES: HeartPackage[] = [
   },
   {
     id: 'heart_tier_2',
-    appleProductId: 'com.snake.cutemonster.hearts32',
+    appleProductId: 'com.elemall.snakegame.hearts32',
     name: '人氣愛心盒 (贈2心)',
     hearts: 30,
     bonusHearts: 2,
@@ -42,7 +41,7 @@ export const HEART_PACKAGES: HeartPackage[] = [
   },
   {
     id: 'heart_tier_3',
-    appleProductId: 'com.snake.cutemonster.hearts75',
+    appleProductId: 'com.elemall.snakegame.hearts75',
     name: '超狂愛心箱 (贈15心)',
     hearts: 60,
     bonusHearts: 15,
@@ -52,7 +51,7 @@ export const HEART_PACKAGES: HeartPackage[] = [
   },
   {
     id: 'heart_tier_4',
-    appleProductId: 'com.snake.cutemonster.hearts160',
+    appleProductId: 'com.elemall.snakegame.hearts160',
     name: '皇家至尊寶庫 (贈40心)',
     hearts: 120,
     bonusHearts: 40,
@@ -89,13 +88,46 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
   onClose,
   onAddHearts,
   onWatchAdReward,
-  onOpenShop,
 }) => {
+  const isIOS = iapService.isNativeIOS();
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(5);
   const [isAdLoading, setIsAdLoading] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
+  const [purchaseNotice, setPurchaseNotice] = useState<{ text: string; tone: 'success' | 'error' | 'info' } | null>(null);
   const [purchasingPkgId, setPurchasingPkgId] = useState<string | null>(null);
+  const [iosCatalog, setIosCatalog] = useState<IOSCatalogState>(() => iapService.getIOSCatalogState());
+
+  const purchasingRef = useRef(false);
+  const adActionLockRef = useRef(false);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showNotice = (text: string, tone: 'success' | 'error' | 'info' = 'success', durationMs = 3500) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setPurchaseNotice({ text, tone });
+    noticeTimerRef.current = setTimeout(() => {
+      setPurchaseNotice(null);
+      noticeTimerRef.current = null;
+    }, durationMs);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    };
+  }, []);
+
+  // iOS 專用：訂閱 StoreKit 真實商品目錄並在開啟視窗時載入本地化價格
+  useEffect(() => {
+    if (!isIOS) return;
+    const unsubscribe = iapService.subscribeIOSCatalog(setIosCatalog);
+    return unsubscribe;
+  }, [isIOS]);
+
+  useEffect(() => {
+    if (isOpen && isIOS) {
+      void iapService.loadIOSProducts();
+    }
+  }, [isOpen, isIOS]);
 
   const maxAds = maxDailyAds ?? 5;
   const currentAdCount = dailyAdWatchCount ?? 0;
@@ -135,15 +167,15 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
           : language === 'zh-CN'
           ? `看广告奖励：已获取 +1 颗爱心！❤️ (今日剩余 ${nextRemaining}/${maxAds} 次)`
           : `看廣告獎勵：已獲取 +1 顆愛心！❤️ (今日剩餘 ${nextRemaining}/${maxAds} 次)`;
-      setPurchaseSuccess(msg);
-      setTimeout(() => setPurchaseSuccess(null), 3500);
+      showNotice(msg, 'success');
     }
     return success;
   };
 
-  // Countdown timer for simulated ad (5秒贊助商短片廣告倒數)
+  // 僅限明確開發預覽環境 (Vite DEV 且非原生裝置) 之 5 秒模擬短片倒數；Production / iOS Release Build 編譯期完全剔除
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    if (!import.meta.env.DEV || isCapacitorNative()) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (adWatching && adCountdown > 0) {
       timer = setTimeout(() => {
         setAdCountdown((c) => {
@@ -157,40 +189,70 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
       setAdWatching(false);
       grantReward();
     }
-    return () => clearTimeout(timer);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [adWatching, adCountdown]);
 
   if (!isOpen) return null;
 
+  const getAdUnavailableMessage = () =>
+    language === 'en'
+      ? 'Ad is currently unavailable. Please try again later.'
+      : language === 'ja'
+      ? '広告は現在利用できません。しばらくしてからもう一度お試しください。'
+      : language === 'zh-CN'
+      ? '广告暂时不可用，请稍后再试！'
+      : '廣告暫時不可用，請稍後再試！';
+
   const handleWatchAd = async () => {
-    if (isAdLimitReached || isAdLoading || adWatching) {
+    if (isAdLimitReached || isAdLoading || adWatching || adActionLockRef.current) {
       soundEngine.playTurn();
       return;
     }
     soundEngine.playClick();
+    adActionLockRef.current = true;
     setIsAdLoading(true);
 
     try {
-      // 1. 若在原生手機環境 (Capacitor Android / iOS) 且原生 AdMob 插件可用，優先調用真實 AdMob
-      if (isCapacitorNative() && admobService.hasNativePlugin()) {
-        const result = await admobService.showRewardedAd();
-        if (result.success) {
-          grantReward();
-          setIsAdLoading(false);
+      // 1. 原生手機環境 (Capacitor iOS / Android)：嚴格禁止任何模擬廣告 fallback 或免費派發
+      if (isCapacitorNative()) {
+        if (!admobService.hasNativePlugin()) {
+          showNotice(getAdUnavailableMessage(), 'info');
           return;
         }
-        console.log('[HeartsModal] 原生廣告未成功播放或無廣告庫存，無縫切換至備用廣告:', result.reason);
+
+        const result = await admobService.showRewardedAd();
+        if (result.success && result.playedNativeAd && result.rewardEarned !== false) {
+          grantReward();
+          return;
+        }
+
+        if (result.reason !== 'USER_DISMISSED' && result.reason !== 'ALREADY_LOADING') {
+          if (result.reason !== 'CONSENT_REQUIRED') {
+            void admobService.preloadRewardedAd();
+          }
+          showNotice(getAdUnavailableMessage(), 'info');
+        }
+        return;
       }
+
+      // 2. Web 瀏覽器：僅在明確的開發預覽環境 (import.meta.env.DEV) 允許模擬廣告；
+      //    Production / iOS Release Build 中此分支編譯期完全剔除，絕不可觸發。
+      if (import.meta.env.DEV) {
+        setAdCountdown(5);
+        setAdWatching(true);
+        return;
+      }
+
+      showNotice(getAdUnavailableMessage(), 'info');
     } catch (err) {
-      console.warn('[HeartsModal] 調用原生 AdMob 異常，切換至備用廣告:', err);
+      console.warn('[HeartsModal] 調用原生 AdMob 異常:', err);
+      showNotice(getAdUnavailableMessage(), 'info');
     } finally {
       setIsAdLoading(false);
+      adActionLockRef.current = false;
     }
-
-    // 2. 備用與模擬方案 (100% 確保點擊必定有反應，在任何環境均能流暢彈出 5 秒短片廣告):
-    // 包含：未包含原生 AdMob 插件的 TestFlight 構建、AdMob 審核中/無填充、Web 預覽等
-    setAdCountdown(5);
-    setAdWatching(true);
   };
 
   // 要 5000 個金幣先可以換一個心
@@ -207,46 +269,77 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
           : language === 'zh-CN'
           ? `兑换成功！已获得 +${amount} 颗爱心 (消耗 ${cost} 金币)！`
           : `兌換成功！已獲得 +${amount} 顆愛心 (消耗 ${cost} 金幣)！`;
-      setPurchaseSuccess(msg);
-      setTimeout(() => setPurchaseSuccess(null), 2500);
+      showNotice(msg, 'success', 2500);
     }
   };
 
-  // 購買愛心 (Apple In-App Purchase / StoreKit 原生與沙盒)
+  // 購買愛心 (Apple StoreKit 2 / Google Play Billing)
   const handleBuyPackage = async (pkg: HeartPackage) => {
-    if (purchasingPkgId) return;
+    if (purchasingPkgId || purchasingRef.current) return;
+
+    // iOS：商品未載入或不可用時禁止發起購買（不得模擬）
+    if (isIOS && !iosCatalog.products[pkg.appleProductId]) {
+      soundEngine.haptic('collision');
+      showNotice(
+        language === 'en'
+          ? 'Product unavailable from App Store. Please tap Retry.'
+          : language === 'ja'
+          ? 'App Store から商品情報を取得できません。再試行してください。'
+          : language === 'zh-CN'
+          ? '此商品暂时不可用，请点击重试重新加载。'
+          : '此商品暫時不可用，請點擊重試重新載入。',
+        'error'
+      );
+      return;
+    }
+
     soundEngine.playClick();
+    purchasingRef.current = true;
     setPurchasingPkgId(pkg.id);
 
     try {
-      const result = await iapService.purchaseProduct(pkg.appleProductId);
+      const result = await iapService.purchaseProduct(pkg.appleProductId, language);
       if (result.success) {
-        const totalHearts = pkg.hearts + (pkg.bonusHearts || 0);
-        onAddHearts(totalHearts);
+        const totalHearts = result.grantedAmount || pkg.hearts + (pkg.bonusHearts || 0);
+        // iOS 交易已在 iapService + App 層原子派發並寫入持久化 Ledger，避免重複派發；
+        // Android / Web DEV 維持既有 onAddHearts 呼叫。
+        if (!result.fulfilledAtomically) {
+          onAddHearts(totalHearts);
+        }
         soundEngine.playSpecialEat();
         triggerConfetti();
 
         const msg =
           language === 'en'
-            ? `IAP Success! +${totalHearts} Hearts added! ❤️`
+            ? `Purchase complete! +${totalHearts} Hearts added! ❤️`
             : language === 'ja'
             ? `IAP 購入完了！ハート+${totalHearts}個獲得！❤️`
             : language === 'zh-CN'
             ? `官方内购成功！已获取 +${totalHearts} 颗爱心！❤️`
             : `官方內購成功！已獲取 +${totalHearts} 顆愛心！❤️`;
-        setPurchaseSuccess(msg);
-        setTimeout(() => setPurchaseSuccess(null), 3500);
-      } else if (!result.cancelled && result.error) {
+        showNotice(msg, 'success');
+      } else if (result.pending && result.error) {
+        showNotice(result.error, 'info', 5000);
+      } else if (!result.cancelled && !result.duplicate && result.error) {
         soundEngine.haptic('collision');
-        setPurchaseSuccess(result.error);
-        setTimeout(() => setPurchaseSuccess(null), 3500);
+        showNotice(result.error, 'error');
       }
     } catch (e: any) {
-      console.error('Apple IAP error:', e);
+      console.error('IAP Hearts error:', e);
     } finally {
+      purchasingRef.current = false;
       setPurchasingPkgId(null);
     }
   };
+
+  const iosHeartProductsAvailableCount = isIOS
+    ? HEART_PACKAGES.filter((p) => Boolean(iosCatalog.products[p.appleProductId])).length
+    : HEART_PACKAGES.length;
+  const showIOSRetryBanner =
+    isIOS &&
+    iosCatalog.status !== 'loading' &&
+    iosCatalog.status !== 'idle' &&
+    iosHeartProductsAvailableCount < HEART_PACKAGES.length;
 
   const isOutOfHearts = hearts <= 0;
 
@@ -286,8 +379,8 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
         }
       }}
     >
-      {/* Sponsor Video Ad Overlay (5秒廣告倒數，任何環境 100% 保證可彈出並成功獲得 +1 ❤️) */}
-      {adWatching && (
+      {/* Sponsor Video Ad Overlay — 僅限本機開發預覽 (Vite DEV + 非原生環境)，iOS Release Build 會在編譯期完全移除 */}
+      {import.meta.env.DEV && !isCapacitorNative() && adWatching && (
         <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 animate-fade-in text-center select-none">
           {/* Header Spacer (circled elements removed per request) */}
           <div className="w-full max-w-md pt-safe" />
@@ -369,10 +462,22 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
 
         {/* Scrollable Content */}
         <div className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0 space-y-3">
-          {purchaseSuccess && (
-            <div className="text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 py-2 px-3 rounded-xl animate-fade-in flex items-center justify-center gap-1.5 shadow-md">
-              <Check className="w-4 h-4 shrink-0" />
-              <span>{purchaseSuccess}</span>
+          {purchaseNotice && (
+            <div
+              className={`text-xs font-bold py-2 px-3 rounded-xl animate-fade-in flex items-center justify-center gap-1.5 shadow-md border ${
+                purchaseNotice.tone === 'error'
+                  ? 'text-rose-300 bg-rose-500/15 border-rose-500/30'
+                  : purchaseNotice.tone === 'info'
+                  ? 'text-amber-300 bg-amber-500/15 border-amber-500/30'
+                  : 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
+              }`}
+            >
+              {purchaseNotice.tone === 'error' || purchaseNotice.tone === 'info' ? (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              ) : (
+                <Check className="w-4 h-4 shrink-0" />
+              )}
+              <span>{purchaseNotice.text}</span>
             </div>
           )}
 
@@ -462,10 +567,53 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
 
             {/* 3. 購買愛心 (雙平台官方應用程式內購專區) */}
             <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-purple-950/50 to-slate-900 border border-indigo-500/40 flex flex-col gap-2.5 shadow-md">
+              {showIOSRetryBanner && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/30 flex items-center justify-between gap-2 text-xs text-amber-200">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-300" />
+                    <span className="leading-snug">
+                      {language === 'en'
+                        ? 'Unable to load App Store prices. Please retry.'
+                        : language === 'ja'
+                        ? 'App Store の価格情報を読み込めませんでした。再試行してください。'
+                        : language === 'zh-CN'
+                        ? '无法从 App Store 载入商品价格，请重试。'
+                        : '無法從 App Store 載入商品價格，請重試。'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      void iapService.loadIOSProducts(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] flex items-center gap-1 shrink-0 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>
+                      {language === 'en'
+                        ? 'Retry'
+                        : language === 'ja'
+                        ? '再試行'
+                        : language === 'zh-CN'
+                        ? '重试'
+                        : '重試'}
+                    </span>
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 {HEART_PACKAGES.map((pkg) => {
                   const totalHearts = pkg.hearts + (pkg.bonusHearts || 0);
                   const isThisPurchasing = purchasingPkgId === pkg.id;
+                  const storeProduct = isIOS ? iosCatalog.products[pkg.appleProductId] : undefined;
+                  const isCatalogLoading =
+                    isIOS && (iosCatalog.status === 'idle' || iosCatalog.status === 'loading');
+                  const isProductUnavailable = isIOS && !isCatalogLoading && !storeProduct;
+                  const isButtonDisabled =
+                    purchasingPkgId !== null || isCatalogLoading || isProductUnavailable;
+                  const displayPrice = isIOS ? storeProduct?.priceString : pkg.priceTag;
 
                   return (
                     <div
@@ -507,16 +655,18 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
 
                       <button
                         type="button"
-                        disabled={purchasingPkgId !== null}
+                        disabled={isButtonDisabled}
                         onClick={() => handleBuyPackage(pkg)}
-                        className={`py-1.5 px-2.5 sm:px-3 rounded-xl font-black text-xs transition-all active:scale-95 shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap min-h-[36px] ${
-                          isThisPurchasing
+                        className={`py-1.5 px-2.5 sm:px-3 rounded-xl font-black text-xs transition-all active:scale-95 shadow-sm flex items-center gap-1.5 shrink-0 whitespace-nowrap min-h-[36px] ${
+                          isThisPurchasing || isCatalogLoading
                             ? 'bg-slate-700 text-slate-300 cursor-wait'
+                            : isProductUnavailable
+                            ? 'bg-slate-800 text-slate-500 border border-slate-700/80 cursor-not-allowed'
                             : pkg.isBestValue
-                            ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 hover:brightness-110 shadow-amber-500/20'
+                            ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 hover:brightness-110 shadow-amber-500/20 cursor-pointer'
                             : pkg.isPopular
-                            ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:brightness-110 shadow-pink-500/20'
-                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
+                            ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:brightness-110 shadow-pink-500/20 cursor-pointer'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20 cursor-pointer'
                         }`}
                       >
                         {isThisPurchasing ? (
@@ -524,10 +674,33 @@ export const HeartsModal: React.FC<HeartsModalProps> = ({
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             <span>{language === 'en' ? 'Processing...' : '連線中...'}</span>
                           </>
+                        ) : isCatalogLoading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>
+                              {language === 'en'
+                                ? 'Loading...'
+                                : language === 'ja'
+                                ? '読込中...'
+                                : language === 'zh-CN'
+                                ? '载入中...'
+                                : '載入中...'}
+                            </span>
+                          </>
+                        ) : isProductUnavailable ? (
+                          <span>
+                            {language === 'en'
+                              ? 'Unavailable'
+                              : language === 'ja'
+                              ? '利用不可'
+                              : language === 'zh-CN'
+                              ? '暂不可用'
+                              : '暫不可用'}
+                          </span>
                         ) : (
                           <>
                             <CreditCard className="w-3 h-3 shrink-0" />
-                            <span>{pkg.priceTag}</span>
+                            <span>{displayPrice}</span>
                           </>
                         )}
                       </button>

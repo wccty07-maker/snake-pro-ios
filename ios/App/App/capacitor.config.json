@@ -1,5 +1,5 @@
 {
-	"appId": "com.elemall.snakegame",
+	"appId": "elemall.snakegame.1",
 	"appName": "Snake Pro",
 	"webDir": "dist",
 	"server": {
@@ -14,6 +14,12 @@
 		"backgroundColor": "#060914"
 	},
 	"packageClassList": [
-		"AppPlugin"
-	]
+		"AdMobPlugin",
+		"NativePurchasesPlugin"
+	],
+	"plugins": {
+		"NativePurchases": {
+			"autoFinishTransactions": false
+		}
+	}
 }

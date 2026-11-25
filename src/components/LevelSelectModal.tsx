@@ -230,7 +230,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
           </div>
         </div>
 
-        {/* Test Mode Quick Status & Revert Banner (Only shown if testing mode is active) */}
+        {/* Test Mode Quick Status & Revert Banner */}
         {unlockAllLevels && (
           <div className="px-3 py-1.5 bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-emerald-950/80 border-b border-amber-500/30 flex items-center justify-between text-[11px] shrink-0 z-20 shadow-sm">
             <div className="flex items-center gap-1.5 text-amber-200 font-bold truncate">
@@ -250,7 +250,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                 type="button"
                 onClick={() => {
                   soundEngine.playClick();
-                  onRestoreProgression();
+                  onRestoreProgression?.();
                 }}
                 className="px-2 py-0.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[10px] shrink-0 shadow transition-all active:scale-95 ml-2 cursor-pointer"
                 title={

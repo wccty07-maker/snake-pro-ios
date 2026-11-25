@@ -63,15 +63,21 @@ def patch_ipa(ipa_path, keychain_path=None, build_override=None):
     if "UISupportedInterfaceOrientations~ipad" in plist_data:
         del plist_data["UISupportedInterfaceOrientations~ipad"]
 
-    # Apple requires CFBundleVersion to be strictly higher than previously uploaded (App Store Connect latest is 200)
+    # Preserve dynamically resolved CFBundleVersion (strictly higher than App Store Connect's latest build)
     raw_build = build_override or os.environ.get("BUILD_NUMBER")
     try:
-        b_val = int(raw_build) if raw_build else 205
-        if b_val <= 200:
-            b_val += 205
-        plist_data["CFBundleVersion"] = str(b_val)
+        if build_override and int(build_override) > 0:
+            plist_data["CFBundleVersion"] = str(int(build_override))
+        elif raw_build and int(raw_build) > 0:
+            b_val = int(raw_build)
+            if b_val <= 250:
+                b_val += 250
+            plist_data["CFBundleVersion"] = str(b_val)
+        elif not plist_data.get("CFBundleVersion"):
+            plist_data["CFBundleVersion"] = "251"
     except Exception:
-        plist_data["CFBundleVersion"] = "205"
+        if not plist_data.get("CFBundleVersion"):
+            plist_data["CFBundleVersion"] = "251"
 
     print(f"[IPA-Patch] Verified -> DTSDKName: {plist_data.get('DTSDKName')}, DTXcode: {plist_data.get('DTXcode')}, CFBundleVersion: {plist_data.get('CFBundleVersion')}, UIDeviceFamily: {plist_data.get('UIDeviceFamily')}")
 
